@@ -7,53 +7,97 @@ import (
 	"unsafe"
 )
 
-type buildType int
+type argtype uint16
 
 const (
-	typeCstring buildType = iota
+	type64     argtype = 0 // movq              64 bit
+	typeS32    argtype = 1 // movlqsx    signed 32 bit
+	typeU32    argtype = 2 // movlqzx  unsigned 32 bit
+	typeS16    argtype = 3 // movwqsx    signed 16 bit
+	typeU16    argtype = 4 // movwqzx  unsigned 16 bit
+	typeS8     argtype = 5 // movbqsx    signed 8  bit
+	typeU8     argtype = 6 // movbqzx  unsigned 8  bit
+	typeDouble argtype = 0 // movsd             64 bit
+	typeFloat  argtype = 1 // movss             32 bit
+	typeUnused argtype = 0xFFFF
 )
 
-type builder struct {
-	index int
-	kind  buildType
-}
-
-type argumentType uintptr
-
-const (
-	typePointer argumentType = 0
-	typeInteger argumentType = 1
-)
+/*
+	0:   fn
+	8:   base
+	16:  stack
+	24:  slicelen
+	32:  slicecap
+	40:  regarg0 rdi
+	44:  regarg1 rsi
+	48:  regarg2 rdx
+	52:  regarg3 rcx
+	56:  regarg4 r8
+	60:  regarg5 r9
+	64:  xmmarg0 xmm2
+	68:  xmmarg1 xmm3
+	72:  xmmarg2 xmm4
+	76:  xmmarg3 xmm5
+	80:  xmmarg4 xmm6
+	84:  xmmarg5 xmm7
+	88:  ret0    rax
+	92:  ret1    rdx
+	96:  xmmret0 xmm0
+	100: xmmret1 xmm1
+	104: rax     rax
+*/
 
 type argument struct {
-	offset uintptr
-	kind   argumentType
+	offset uint16
+	t      argtype
 }
 
 // Spec is the callspec needed to do the actuall call
 type Spec struct {
 	fn      uintptr
 	base    uintptr
-	regargs [6]uintptr
-	rax     uintptr
-	ret0    uintptr
-	ret1    uintptr
+	stack   []argument
+	intargs [6]argument
+	xmmargs [6]argument
+	ret0    argument
+	ret1    argument
+	xmmret0 argument
+	xmmret1 argument
+	rax     uint8
 }
 
 var sliceOffset = reflect.TypeOf(reflect.SliceHeader{}).Field(0).Offset
 
-func fieldToOffset(k reflect.StructField, t string) uintptr {
+func fieldToOffset(k reflect.StructField, t string) (argument, bool) {
 	switch k.Type.Kind() {
 	case reflect.Slice:
-		return k.Offset + sliceOffset // FIXME: is this correct?
-	case reflect.Int:
-		return k.Offset
-		// TODO: implement types
+		return argument{uint16(k.Offset + sliceOffset), type64}, false
+	case reflect.Int, reflect.Uint, reflect.Uint64, reflect.Int64, reflect.Ptr:
+		return argument{uint16(k.Offset), type64}, false
+	case reflect.Int32:
+		return argument{uint16(k.Offset), typeS32}, false
+	case reflect.Uint32:
+		return argument{uint16(k.Offset), typeU32}, false
+	case reflect.Int16:
+		return argument{uint16(k.Offset), typeS16}, false
+	case reflect.Uint16:
+		return argument{uint16(k.Offset), typeU16}, false
+	case reflect.Int8:
+		return argument{uint16(k.Offset), typeS8}, false
+	case reflect.Uint8, reflect.Bool:
+		return argument{uint16(k.Offset), typeU8}, false
+	case reflect.Float32:
+		return argument{uint16(k.Offset), typeFloat}, true
+	case reflect.Float64:
+		return argument{uint16(k.Offset), typeDouble}, true
 	}
 	panic("Unknown Type")
 }
 
-func MakeSpec(args interface{}) Spec {
+// FIXME: we don't support stuff > 64 bit
+
+// MakeSpec builds a call specification for the given arguments
+func MakeSpec(fn uintptr, args interface{}) Spec {
 	v := reflect.ValueOf(args)
 	for v.Kind() == reflect.Ptr {
 		v = v.Elem()
@@ -61,7 +105,18 @@ func MakeSpec(args interface{}) Spec {
 	t := v.Type()
 
 	var spec Spec
+
+	spec.fn = fn
+
+	spec.ret0.t = typeUnused
+	spec.ret1.t = typeUnused
+	spec.xmmret0.t = typeUnused
+	spec.xmmret1.t = typeUnused
+
 	haveRet := false
+
+	intreg := 0
+	xmmreg := 0
 
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
@@ -82,36 +137,44 @@ func MakeSpec(args interface{}) Spec {
 			}
 		}
 		if ret {
-			spec.ret0 = fieldToOffset(f, st)
-			// FIXME ret1!
+			off, xmm := fieldToOffset(f, st)
+			if xmm {
+				spec.xmmret0 = off
+			} else {
+				spec.ret0 = off
+			}
+			// FIXME ret1! - only needed for types > 64 bit
 			continue
 		}
-		spec.regargs[i] = fieldToOffset(f, st)
-		// FIXME stackspill, float, xmm
+		off, xmm := fieldToOffset(f, st)
+		if xmm {
+			if xmmreg < 6 {
+				spec.xmmargs[xmmreg] = off
+				xmmreg++
+			} else {
+				spec.stack = append(spec.stack, off)
+			}
+		} else {
+			if intreg < 6 {
+				spec.intargs[intreg] = off
+				intreg++
+			} else {
+				spec.stack = append(spec.stack, off)
+			}
+		}
 	}
-	// FIXME set rax
+	for i := intreg; i < 6; i++ {
+		spec.intargs[i].t = typeUnused
+	}
+	for i := xmmreg; i < 6; i++ {
+		spec.xmmargs[i].t = typeUnused
+	}
+	spec.rax = uint8(xmmreg)
 	return spec
 }
 
-/*
-	fn
-	base
-	regarg0 rdi
-	regarg1 rsi
-	regarg2 rdx
-	regarg3 rcx
-	regarg4 r8
-	regarg5 r9
-	rax     rax
-	ret0    rax
-	ret1    rdx
-*/
-
-var asmcall3ptr = unsafe.Pointer(reflect.ValueOf(asmcall3).Pointer())
-
-func Call(fn uintptr, spec Spec, args unsafe.Pointer) {
-
-	spec.fn = fn
+// Call calls the given spec with the given arguments
+func (spec Spec) Call(args unsafe.Pointer) {
 	spec.base = uintptr(args)
 
 	entersyscall()
@@ -133,14 +196,4 @@ func exitsyscall()
 
 func asmcall3()
 
-func call3(fn uintptr, arg0 uintptr, arg1 uintptr, arg2 uintptr) uintptr {
-	p := unsafe.Pointer(reflect.ValueOf(asmcall3).Pointer())
-
-	entersyscall()
-	asmcgocall(p, uintptr(unsafe.Pointer(&fn)))
-	exitsyscall()
-
-	runtime.KeepAlive(p)
-	runtime.KeepAlive(fn)
-	return fn
-}
+var asmcall3ptr = unsafe.Pointer(reflect.ValueOf(asmcall3).Pointer())
