@@ -36,45 +36,59 @@
     6: movbqzx  unsigned 8  bit
 
     float:
-    0: movsd             64 bit
-    1: movss             32 bit
+    7: movsd             64 bit
+    8: movss             32 bit
 */
 
 #define LOADREG(off, target) \
     MOVLQSX off(R12), AX \
     TESTQ AX, AX \
-    JS prepared \
+    JS xmm \
     MOVWQZX AX, R11 \
-    SHRQ $16, AX \
+    SHRL $16, AX \
     ADDQ R13, R11 \
     CMPB AX, $0 \
     JNE 3(PC) \
-    MOVQ 0(R11), target \
+    MOVQ 0(R11), target \ // 64bit
     JMP 20(PC) \
     CMPB AX, $1 \
     JNE 3(PC) \
-    MOVLQSX 0(R11), target \
+    MOVLQSX 0(R11), target \ // signed 32 bit
     JMP 18(PC) \
     CMPB AX, $2 \
     JNE 3(PC) \
-    MOVLQZX 0(R11), target \
+    MOVLQZX 0(R11), target \ // unsigned 32 bit
     JMP 14(PC) \
     CMPB AX, $3 \
     JNE 3(PC) \
-    MOVWQSX 0(R11), target \
+    MOVWQSX 0(R11), target \ // signed 16 bit
     JMP 10(PC) \
     CMPB AX, $4 \
     JNE 3(PC) \
-    MOVWQZX 0(R11), target \
+    MOVWQZX 0(R11), target \ // unsigned 16 bit
     JMP 6(PC) \
     CMPB AX, $5 \
     JNE 3(PC) \
-    MOVBQSX 0(R11), target \
+    MOVBQSX 0(R11), target \ // signed 8 bit
     JMP 2(PC) \
-    MOVBQZX 0(R11), target
+    MOVBQZX 0(R11), target // unsigned 8 bit
 
-// func asmcall3()
-TEXT ·asmcall3(SB),NOSPLIT,$0
+#define LOADXMMREG(off, target) \
+    MOVLQSX off(R12), AX \
+    TESTQ AX, AX \
+    JS prepared \
+    MOVWQZX AX, R11 \
+    SHRL $16, AX \
+    ADDQ R13, R11 \
+    CMPB AX, $7 \
+    JNE 3(PC) \
+    MOVSD 0(R11), target \ // float 64bit
+    JMP 2(PC) \
+    MOVSS 0(R11), target \ // float 32bit
+
+
+// func asmcall()
+TEXT ·asmcall(SB),NOSPLIT,$0
     MOVQ DI, R12      // FRAME (preserved)
     MOVQ 8(R12), R13  // base
 
@@ -86,13 +100,16 @@ TEXT ·asmcall3(SB),NOSPLIT,$0
     LOADREG(56, R8)
     LOADREG(60, R9)
 
+xmm:
+
+    LOADXMMREG(64, X2)
+    LOADXMMREG(68, X3)
+    LOADXMMREG(72, X4)
+    LOADXMMREG(76, X5)
+    LOADXMMREG(80, X6)
+    LOADXMMREG(84, X7)
+
 prepared:
-
-/*
-    float: movss
-    double: movsd
-*/
-
     // load number of vector registers
     MOVQ 64(R12), AX
 
@@ -103,10 +120,75 @@ prepared:
     // store ret0
     MOVLQSX 88(R12), BX
     TESTQ BX, BX
+    JS xmmret0
+    MOVWQZX BX, R11
+    SHRL $16, BX
+    ADDQ R13, R11
+    CMPB BX, $0
+    JNE 3(PC)
+    MOVQ AX, (R11)
+    JMP ret1
+    CMPB BX, $2
+    JGT 3(PC)
+    MOVL AX, (R11)
+    JMP ret1
+    CMPB BX, $4
+    JGT 3(PC)
+    MOVW AX, (R11)
+    JMP ret1
+    MOVB AX, (R11)
+
+ret1:
+
+    MOVLQSX 92(R12), BX
+    TESTQ BX, BX
     JS DONE
     MOVWQZX BX, R11
+    SHRL $16, BX
     ADDQ R13, R11
-    MOVQ AX, (R11)
+    CMPB BX, $0
+    JNE 3(PC)
+    MOVQ DX, (R11)
+    JMP ret1
+    CMPB BX, $2
+    JGT 3(PC)
+    MOVL DX, (R11)
+    JMP ret1
+    CMPB BX, $4
+    JGT 3(PC)
+    MOVW DX, (R11)
+    JMP ret1
+    MOVB DX, (R11)
+
+xmmret0:
+
+    MOVLQSX 96(R12), BX
+    TESTQ BX, BX
+    JS DONE
+    MOVWQZX BX, R11
+    SHRL $16, BX
+    ADDQ R13, R11
+    CMPB BX, $7
+    JNE 3(PC)
+    MOVSD X0, (R11)
+    JMP xmmret1
+    MOVSS X0, (R11)
+
+xmmret1:
+
+    MOVLQSX 100(R12), BX
+    TESTQ BX, BX
+    JS DONE
+    MOVWQZX BX, R11
+    SHRL $16, BX
+    ADDQ R13, R11
+    CMPB BX, $7
+    JNE 3(PC)
+    MOVSD X1, (R11)
+    JMP xmmret1
+    MOVSS X1, (R11)
+
+// TODO
 
 DONE:
     RET

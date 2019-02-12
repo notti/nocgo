@@ -2,7 +2,6 @@ package ffi
 
 import (
 	"reflect"
-	"runtime"
 	"strings"
 	"unsafe"
 )
@@ -17,8 +16,8 @@ const (
 	typeU16    argtype = 4 // movwqzx  unsigned 16 bit
 	typeS8     argtype = 5 // movbqsx    signed 8  bit
 	typeU8     argtype = 6 // movbqzx  unsigned 8  bit
-	typeDouble argtype = 0 // movsd             64 bit
-	typeFloat  argtype = 1 // movss             32 bit
+	typeDouble argtype = 7 // movsd             64 bit
+	typeFloat  argtype = 8 // movss             32 bit
 	typeUnused argtype = 0xFFFF
 )
 
@@ -178,12 +177,20 @@ func (spec Spec) Call(args unsafe.Pointer) {
 	spec.base = uintptr(args)
 
 	entersyscall()
-	asmcgocall(asmcall3ptr, uintptr(unsafe.Pointer(&spec)))
+	asmcgocall(asmcallptr, uintptr(unsafe.Pointer(&spec)))
 	exitsyscall()
 
-	runtime.KeepAlive(args)
-	runtime.KeepAlive(spec)
+	if _Cgo_always_false {
+		_Cgo_use(args)
+		_Cgo_use(spec)
+	}
 }
+
+//go:linkname _Cgo_always_false runtime.cgoAlwaysFalse
+var _Cgo_always_false bool
+
+//go:linkname _Cgo_use runtime.cgoUse
+func _Cgo_use(interface{})
 
 //go:linkname asmcgocall runtime.asmcgocall
 func asmcgocall(unsafe.Pointer, uintptr) int32
@@ -194,6 +201,7 @@ func entersyscall()
 //go:linkname exitsyscall runtime.exitsyscall
 func exitsyscall()
 
-func asmcall3()
+func asmcall()
 
-var asmcall3ptr = unsafe.Pointer(reflect.ValueOf(asmcall3).Pointer())
+// dunno how else to get the address of asmcall...
+var asmcallptr = unsafe.Pointer(reflect.ValueOf(asmcall).Pointer())

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"unsafe"
 
 	"github.com/notti/go-dynamic/steps/3_goffi/ffi"
@@ -16,6 +17,8 @@ type putsString struct {
 }
 
 func main() {
+	fmt.Println(os.Args) // check if startup works
+
 	str := "hello world"
 	b := append([]byte(str), 0)
 
