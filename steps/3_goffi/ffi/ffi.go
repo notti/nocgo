@@ -33,17 +33,19 @@ const (
 	52:  regarg3 rcx
 	56:  regarg4 r8
 	60:  regarg5 r9
-	64:  xmmarg0 xmm2
-	68:  xmmarg1 xmm3
-	72:  xmmarg2 xmm4
-	76:  xmmarg3 xmm5
-	80:  xmmarg4 xmm6
-	84:  xmmarg5 xmm7
-	88:  ret0    rax
-	92:  ret1    rdx
-	96:  xmmret0 xmm0
-	100: xmmret1 xmm1
-	104: rax     rax
+	64:  xmmarg0 xmm0
+	68:  xmmarg1 xmm1
+	72:  xmmarg2 xmm2
+	76:  xmmarg3 xmm3
+	80:  xmmarg4 xmm4
+	84:  xmmarg5 xmm5
+	88:  xmmarg6 xmm6
+	92:  xmmarg7 xmm7
+	96:  ret0    rax
+	100: ret1    rdx
+	104: xmmret0 xmm0
+	108: xmmret1 xmm1
+	112: rax     rax
 */
 
 type argument struct {
@@ -57,7 +59,7 @@ type Spec struct {
 	base    uintptr
 	stack   []argument
 	intargs [6]argument
-	xmmargs [6]argument
+	xmmargs [8]argument
 	ret0    argument
 	ret1    argument
 	xmmret0 argument
@@ -202,6 +204,19 @@ func entersyscall()
 func exitsyscall()
 
 func asmcall()
+
+//go:linkname x_cgo_init x_cgo_init
+func x_cgo_init()
+
+// force _cgo_init into the .data segment (instead of .bss), so our "linker" can overwrite its contents
+//go:linkname _cgo_init _cgo_init
+var _cgo_init = uintptr(10)
+
+func init() {
+	if _Cgo_always_false {
+		x_cgo_init() // prevent x_cgo_init from being optimized out
+	}
+}
 
 // dunno how else to get the address of asmcall...
 var asmcallptr = unsafe.Pointer(reflect.ValueOf(asmcall).Pointer())

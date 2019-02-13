@@ -9,11 +9,19 @@ import (
 )
 
 var puts__dynload uintptr
-var strcat__dynload uintptr
+var test_call__dynload uintptr
 
 type putsString struct {
 	s   []byte
 	num int `ffi:"ret"`
+}
+
+type testCall struct {
+	a   uint16
+	b   int
+	c   float32
+	d   float64
+	ret int `ffi:"ret"`
 }
 
 func main() {
@@ -22,12 +30,17 @@ func main() {
 	str := "hello world"
 	b := append([]byte(str), 0)
 
-	args := &putsString{s: b}
-	spec := ffi.MakeSpec(puts__dynload, args)
+	argsP := &putsString{s: b}
+	specP := ffi.MakeSpec(puts__dynload, argsP)
 
-	fmt.Println(args, spec)
+	fmt.Println(argsP, specP)
+	specP.Call(unsafe.Pointer(argsP))
+	fmt.Println(argsP)
 
-	spec.Call(unsafe.Pointer(args))
+	argsT := &testCall{1, 2, 3, 4, 5}
+	specT := ffi.MakeSpec(test_call__dynload, argsT)
 
-	fmt.Println(args)
+	fmt.Println(argsT, specT)
+	specT.Call(unsafe.Pointer(argsT))
+	fmt.Println(argsT)
 }

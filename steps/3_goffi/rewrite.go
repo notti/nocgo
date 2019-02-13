@@ -18,7 +18,7 @@ const (
 	interp = "/lib64/ld-linux-x86-64.so.2"
 )
 
-var libs = []string{"libc.so.6"}
+var libs = []string{"libc.so.6", "libpthread.so.0", "libcalltest.so.1"}
 
 func doCopy() {
 	src, err := os.Open(in)
@@ -462,7 +462,7 @@ func (e *elfFile) makeDynRel(symbols []RelSymbol) ([]byte, bool, uint64) {
 		rela = true
 		relt = uint64(elf.R_X86_64_JMP_SLOT)
 	default:
-		log.Panic("Unknown machine type ", e.e.Machine)
+		log.Fatal("Unknown machine type ", e.e.Machine)
 	}
 
 	var relsz uint64
@@ -517,32 +517,32 @@ func main() {
 	}
 
 	/*
-	        KEEP EXEC (we are not dyn after all)
-	        try to put new program headers, dyn, interp into first 4k
-	        0  -+-----------------------------------+--
-	            | ELF                               |
-	            +-----------------------------------+
-	            | program headers                   |
-	            +-----------------------------------+
-	            | interp                            |
-	            +-----------------------------------+
-	            | dyn stuff                         |
-	            +-----------------------------------+
-	            | other stuff that needs relocation |
-	            +-----------------------------------+-- ensure mapping until here
-	            +-----------------------------------+
-	   entry -> | Everything else (e.g., text)      |
-	            +-----------------------------------+
-	            | .shstrtab                         |
-	            +-----------------------------------+
-	            | Section headers                   |
-	            +-----------------------------------+
+		        KEEP EXEC (we are not dyn after all)
+		        try to put new program headers, dyn, interp into first 4k
+		        0  -+-----------------------------------+--
+		            | ELF                               |
+		            +-----------------------------------+
+		            | program headers                   |
+		            +-----------------------------------+
+		            | interp                            |
+		            +-----------------------------------+
+		should be   | dyn stuff                         |
+		 below 4k ->+-----------------------------------+
+		            | other stuff that needs relocation |
+		            +-----------------------------------+<- ensure mapping until here
+		            +-----------------------------------+
+		   entry -> | Everything else (e.g., text)      |
+		            +-----------------------------------+
+		            | .shstrtab                         |
+		            +-----------------------------------+
+		            | Section headers                   |
+		            +-----------------------------------+
 	*/
 
 	// First some sanity checks - and checks if we can do our meddling, after all we don't support everything in this POC
 
 	if f.e.Type != elf.ET_EXEC {
-		log.Panic("only static binaries not using an interp supported")
+		log.Fatal("only static binaries not using an interp supported")
 	}
 
 	var base uint64
@@ -550,7 +550,7 @@ func main() {
 
 	for i, prog := range f.e.Progs {
 		if prog.Type == elf.PT_INTERP || prog.Type == elf.PT_DYNAMIC {
-			log.Panic("only static binaries not using an interp supported")
+			log.Fatal("only static binaries not using an interp supported")
 		}
 		if prog.Type == elf.PT_LOAD {
 			if base == 0 {
@@ -564,7 +564,7 @@ func main() {
 	}
 
 	if uint64(f.phoff+f.phentsize*uint64(len(f.e.Progs))) > f.e.Entry {
-		log.Panic("Not enough space before entry point")
+		log.Fatal("Not enough space before entry point")
 	}
 
 	interpProg := len(f.e.Progs)
@@ -631,6 +631,10 @@ func main() {
 		Section: int(elf.SHN_UNDEF),
 	})
 
+	x_cgo_init := uint64(0)
+	_cgo_init := uint64(0)
+	_cgo_size := uint64(0)
+
 	for _, sym := range symbolList {
 		if strings.HasSuffix(sym.Name, "__dynload") {
 			parts := strings.Split(sym.Name, ".")
@@ -651,6 +655,25 @@ func main() {
 				Vis:     elf.STV_DEFAULT,
 				Section: int(elf.SHN_UNDEF),
 			})
+		}
+		if sym.Name == "x_cgo_init" {
+			x_cgo_init = sym.Value
+		}
+		if sym.Name == "_cgo_init" {
+			sec := f.e.Sections[sym.Section]
+			_cgo_init = sym.Value - sec.Addr + sec.Offset
+			_cgo_size = sym.Size
+		}
+	}
+
+	if x_cgo_init != 0 && _cgo_init != 0 && _cgo_size != 0 {
+		switch _cgo_size {
+		case 4:
+			f.Write32At(uint32(x_cgo_init), _cgo_init)
+		case 8:
+			f.Write64At(x_cgo_init, _cgo_init)
+		default:
+			log.Fatalln("Unknown symbol size", _cgo_size)
 		}
 	}
 
@@ -700,6 +723,7 @@ func main() {
 		{Tag: elf.DT_SYMTAB, Val: base + dynsymPos},
 		{Tag: elf.DT_SYMENT, Val: dynsymLen},
 		{Tag: elf.DT_HASH, Val: hashPos + base},
+		{Tag: elf.DT_BIND_NOW, Val: 0},
 		{Tag: elf.DT_NULL, Val: 0},
 	}...)
 

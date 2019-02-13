@@ -14,17 +14,19 @@
 	52:  regarg3 rcx
 	56:  regarg4 r8
 	60:  regarg5 r9
-	64:  xmmarg0 xmm2
-	68:  xmmarg1 xmm3
-	72:  xmmarg2 xmm4
-	76:  xmmarg3 xmm5
-	80:  xmmarg4 xmm6
-	84:  xmmarg5 xmm7
-	88:  ret0    rax
-	92:  ret1    rdx
-	96:  xmmret0 xmm0
-	100: xmmret1 xmm1
-	104: rax     rax
+	64:  xmmarg0 xmm0
+	68:  xmmarg1 xmm1
+	72:  xmmarg2 xmm2
+	76:  xmmarg3 xmm3
+	80:  xmmarg4 xmm4
+	84:  xmmarg5 xmm5
+	88:  xmmarg6 xmm6
+	92:  xmmarg7 xmm7
+	96:  ret0    rax
+	100: ret1    rdx
+	104: xmmret0 xmm0
+	108: xmmret1 xmm1
+	112: rax     rax
 
     int:
     0: movq     64bit
@@ -88,7 +90,7 @@
 
 
 // func asmcall()
-TEXT ·asmcall(SB),NOSPLIT,$0
+TEXT ·asmcall(SB),NOSPLIT,$16 // the 16 fixes the stack alignment which was broken by the call to asmcall
     MOVQ DI, R12      // FRAME (preserved)
     MOVQ 8(R12), R13  // base
 
@@ -102,23 +104,24 @@ TEXT ·asmcall(SB),NOSPLIT,$0
 
 xmm:
 
-    LOADXMMREG(64, X2)
-    LOADXMMREG(68, X3)
-    LOADXMMREG(72, X4)
-    LOADXMMREG(76, X5)
-    LOADXMMREG(80, X6)
-    LOADXMMREG(84, X7)
+    LOADXMMREG(64, X0)
+    LOADXMMREG(68, X1)
+    LOADXMMREG(72, X2)
+    LOADXMMREG(76, X3)
+    LOADXMMREG(80, X4)
+    LOADXMMREG(84, X5)
+    LOADXMMREG(88, X6)
+    LOADXMMREG(92, X7)
 
 prepared:
     // load number of vector registers
-    MOVQ 64(R12), AX
+    MOVBQZX 112(R12), AX
 
     // do the actuall call
     CALL (R12)
 
-    // FIXME: correct return type
     // store ret0
-    MOVLQSX 88(R12), BX
+    MOVLQSX 96(R12), BX
     TESTQ BX, BX
     JS xmmret0
     MOVWQZX BX, R11
@@ -140,7 +143,7 @@ prepared:
 
 ret1:
 
-    MOVLQSX 92(R12), BX
+    MOVLQSX 100(R12), BX
     TESTQ BX, BX
     JS DONE
     MOVWQZX BX, R11
@@ -162,7 +165,7 @@ ret1:
 
 xmmret0:
 
-    MOVLQSX 96(R12), BX
+    MOVLQSX 104(R12), BX
     TESTQ BX, BX
     JS DONE
     MOVWQZX BX, R11
@@ -176,7 +179,7 @@ xmmret0:
 
 xmmret1:
 
-    MOVLQSX 100(R12), BX
+    MOVLQSX 108(R12), BX
     TESTQ BX, BX
     JS DONE
     MOVWQZX BX, R11
@@ -188,7 +191,41 @@ xmmret1:
     JMP xmmret1
     MOVSS X1, (R11)
 
-// TODO
-
 DONE:
+    RET
+
+
+GLOBL pthread_attr_init__dynload(SB), NOPTR, $8
+GLOBL pthread_attr_getstacksize__dynload(SB), NOPTR, $8
+GLOBL pthread_attr_destroy__dynload(SB), NOPTR, $8
+
+// runtime has #include "go_asm.h"
+// we need to fake those two defines here:
+#define g_stack 0
+#define stack_lo 0
+
+TEXT x_cgo_init(SB),NOSPLIT,$512 // size_t size (8 byte) + unknown pthread_attr_t - hopefully this is big enough
+    MOVQ DI, R12 // g
+
+    // pthread_attr_init(8(SP))
+    LEAQ 8(SP), DI
+    MOVQ $pthread_attr_init__dynload(SB), R11
+    CALL (R11)
+
+    // pthread_attr_init(8(SP), 0(SP))
+    LEAQ 8(SP), DI
+    LEAQ 0(SP), SI
+    MOVQ $pthread_attr_getstacksize__dynload(SB), R11
+    CALL (R11)
+
+    // g->stacklo = &size - size + 4096
+    LEAQ 0x1000(SP), AX
+    SUBQ 0(SP), AX
+    MOVQ AX, (g_stack+stack_lo)(R12)
+
+    // pthread_attr_init(8(SP))
+    LEAQ 8(SP), DI
+    MOVQ $pthread_attr_destroy__dynload(SB), R11
+    CALL (R11)
+
     RET
