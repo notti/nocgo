@@ -27,7 +27,7 @@ type testCall struct {
 	i6  int
 	i7  int
 	i8  int
-	i9  uint16
+	i9  int16
 	ret int `ffi:"ret"`
 }
 
@@ -44,7 +44,7 @@ func main() {
 	specP.Call(unsafe.Pointer(argsP))
 	fmt.Println(argsP)
 
-	argsT := &testCall{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	argsT := &testCall{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, -11, 12}
 	specT := ffi.MakeSpec(test_call__dynload, argsT)
 
 	fmt.Println(argsT, specT)

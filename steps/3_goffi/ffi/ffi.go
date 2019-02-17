@@ -23,33 +23,6 @@ const (
 	typeUnused argtype = 0xFFFF
 )
 
-/*
-	0:   fn
-	8:   base
-	16:  stack
-	24:  slicelen
-	32:  slicecap
-	40:  regarg0 rdi
-	44:  regarg1 rsi
-	48:  regarg2 rdx
-	52:  regarg3 rcx
-	56:  regarg4 r8
-	60:  regarg5 r9
-	64:  xmmarg0 xmm0
-	68:  xmmarg1 xmm1
-	72:  xmmarg2 xmm2
-	76:  xmmarg3 xmm3
-	80:  xmmarg4 xmm4
-	84:  xmmarg5 xmm5
-	88:  xmmarg6 xmm6
-	92:  xmmarg7 xmm7
-	96:  ret0    rax
-	100: ret1    rdx
-	104: xmmret0 xmm0
-	108: xmmret1 xmm1
-	112: rax     rax
-*/
-
 type argument struct {
 	offset uint16
 	t      argtype
@@ -217,6 +190,11 @@ func x_cgo_init()
 // force _cgo_init into the .data segment (instead of .bss), so our "linker" can overwrite its contents
 //go:linkname _cgo_init _cgo_init
 var _cgo_init = uintptr(10)
+
+type emptyComplex64 struct {
+	a complex64
+}
+type emptyComplex128 complex128
 
 func init() {
 	if _Cgo_always_false {

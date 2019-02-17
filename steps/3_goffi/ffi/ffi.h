@@ -24,3 +24,5 @@
 #define Spec_xmmret0 104
 #define Spec_xmmret1 108
 #define Spec_rax 112
+#define emptyComplex64__size 8
+#define emptyComplex64_a 0
