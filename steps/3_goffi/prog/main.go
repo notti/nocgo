@@ -17,10 +17,17 @@ type putsString struct {
 }
 
 type testCall struct {
-	a   uint16
-	b   int
-	c   float32
-	d   float64
+	i1  uint16
+	i2  int
+	f1  float32
+	f2  float64
+	i3  int
+	i4  int
+	i5  int
+	i6  int
+	i7  int
+	i8  int
+	i9  uint16
 	ret int `ffi:"ret"`
 }
 
@@ -37,7 +44,7 @@ func main() {
 	specP.Call(unsafe.Pointer(argsP))
 	fmt.Println(argsP)
 
-	argsT := &testCall{1, 2, 3, 4, 5}
+	argsT := &testCall{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 	specT := ffi.MakeSpec(test_call__dynload, argsT)
 
 	fmt.Println(argsT, specT)

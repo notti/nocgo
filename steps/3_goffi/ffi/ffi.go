@@ -6,6 +6,8 @@ import (
 	"unsafe"
 )
 
+//go:generate go tool compile -asmhdr ffi.h ffi.go
+
 type argtype uint16
 
 const (
@@ -119,12 +121,16 @@ func MakeSpec(fn uintptr, args interface{}) Spec {
 	intreg := 0
 	xmmreg := 0
 
+ARGS:
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		tags := strings.Split(f.Tag.Get("ffi"), ",")
 		ret := false
 		st := ""
 		for _, tag := range tags {
+			if tag == "ignore" {
+				continue ARGS
+			}
 			if tag == "ret" {
 				if haveRet == true {
 					panic("Only one return argument allowed")
@@ -144,12 +150,12 @@ func MakeSpec(fn uintptr, args interface{}) Spec {
 			} else {
 				spec.ret0 = off
 			}
-			// FIXME ret1! - only needed for types > 64 bit
+			// FIXME ret1/xmmret1! - only needed for types > 64 bit
 			continue
 		}
 		off, xmm := fieldToOffset(f, st)
 		if xmm {
-			if xmmreg < 6 {
+			if xmmreg < 8 {
 				spec.xmmargs[xmmreg] = off
 				xmmreg++
 			} else {
@@ -167,7 +173,7 @@ func MakeSpec(fn uintptr, args interface{}) Spec {
 	for i := intreg; i < 6; i++ {
 		spec.intargs[i].t = typeUnused
 	}
-	for i := xmmreg; i < 6; i++ {
+	for i := xmmreg; i < 8; i++ {
 		spec.xmmargs[i].t = typeUnused
 	}
 	spec.rax = uint8(xmmreg)
@@ -179,7 +185,7 @@ func (spec Spec) Call(args unsafe.Pointer) {
 	spec.base = uintptr(args)
 
 	entersyscall()
-	asmcgocall(asmcallptr, uintptr(unsafe.Pointer(&spec)))
+	asmcgocall(unsafe.Pointer(asmcallptr), uintptr(unsafe.Pointer(&spec)))
 	exitsyscall()
 
 	if _Cgo_always_false {
@@ -218,5 +224,7 @@ func init() {
 	}
 }
 
-// dunno how else to get the address of asmcall...
-var asmcallptr = unsafe.Pointer(reflect.ValueOf(asmcall).Pointer())
+//go:linkname funcPC runtime.funcPC
+func funcPC(f interface{}) uintptr
+
+var asmcallptr = funcPC(asmcall)
