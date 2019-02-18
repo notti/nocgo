@@ -32,10 +32,7 @@ type Spec struct {
 	stack   []argument
 	intargs [6]argument
 	xmmargs [8]argument
-	ret0    argument
-	ret1    argument
-	xmmret0 argument
-	xmmret1 argument
+	ret     argument
 	rax     uint8
 }
 
@@ -79,10 +76,7 @@ func makeSpec(fn uintptr, args interface{}) (Spec, error) {
 
 	spec.fn = fn
 
-	spec.ret0.t = typeUnused
-	spec.ret1.t = typeUnused
-	spec.xmmret0.t = typeUnused
-	spec.xmmret1.t = typeUnused
+	spec.ret.t = typeUnused
 
 	haveRet := false
 
@@ -112,12 +106,8 @@ ARGS:
 			}
 		}
 		if ret {
-			off, xmm := fieldToOffset(f, st)
-			if xmm {
-				spec.xmmret0 = off
-			} else {
-				spec.ret0 = off
-			}
+			off, _ := fieldToOffset(f, st)
+			spec.ret = off
 			// FIXME ret1/xmmret1! - only needed for types > 64 bit
 			continue
 		}
