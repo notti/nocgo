@@ -36,7 +36,7 @@ type Spec struct {
 	rax     uint8
 }
 
-func fieldToOffset(k reflect.StructField, t string) (argument, bool) {
+func fieldToOffset(k reflect.StructField) (argument, bool) {
 	switch k.Type.Kind() {
 	case reflect.Slice:
 		return argument{uint16(k.Offset + sliceOffset), type64}, false
@@ -88,7 +88,6 @@ ARGS:
 		f := t.Field(i)
 		tags := strings.Split(f.Tag.Get("nocgo"), ",")
 		ret := false
-		st := ""
 		for _, tag := range tags {
 			if tag == "ignore" {
 				continue ARGS
@@ -101,17 +100,14 @@ ARGS:
 				haveRet = true
 				continue
 			}
-			if strings.HasPrefix(tag, "type=") {
-				st = tag[5:]
-			}
 		}
 		if ret {
-			off, _ := fieldToOffset(f, st)
+			off, _ := fieldToOffset(f)
 			spec.ret = off
 			// FIXME ret1/xmmret1! - only needed for types > 64 bit
 			continue
 		}
-		off, xmm := fieldToOffset(f, st)
+		off, xmm := fieldToOffset(f)
 		if xmm {
 			if xmmreg < 8 {
 				spec.xmmargs[xmmreg] = off
