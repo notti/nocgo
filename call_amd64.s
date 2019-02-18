@@ -11,7 +11,6 @@
 
 
 /*
-    Frame layout:
     int:
     type64:     movq              64 bit
     typeS32:    movlqsx    signed 32 bit
@@ -87,6 +86,8 @@ TEXT ·asmcall(SB),NOSPLIT,$0
     TESTQ AX, AX
     JZ reg
 
+    // ok we have stack arguments so let's do that first
+
     // Fix alignment depending on number of arguments
     MOVQ AX, BX
     ANDQ $3, BX
@@ -103,93 +104,31 @@ next:
     SHRL $16, CX
     ADDQ R13, R11
 
-    CMPB CX, $const_type64
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVQ 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
+#define LOADSTACK(type, instr, tmp) \
+    CMPB CX, type \
+    JNE 7(PC) \
+    SUBQ $8, SP \
+    instr 0(R11), tmp \
+    MOVQ tmp, 0(SP) \
+    TESTQ AX, AX \
+    JZ reg \
     JMP next
 
-    CMPB CX, $const_typeS32
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVLQSX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
-    
-    CMPB CX, $const_typeU32
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVLQZX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
-    
-    CMPB CX, $const_typeS16
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVWQSX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
-    
-    CMPB CX, $const_typeU16
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVWQZX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
-    
-    CMPB CX, $const_typeS8
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVBQSX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
-    
-    CMPB CX, $const_typeU8
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVBQZX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
+#define LOADSTACKINT(type, instr) LOADSTACK(type, instr, CX)
+#define LOADSTACKXMM(type, instr) LOADSTACK(type, instr, X0)
 
-    CMPB CX, $const_typeU8
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVBQZX 0(R11), CX
-    MOVQ CX, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
+    LOADSTACKINT($const_type64, MOVQ)
+    LOADSTACKINT($const_typeS32, MOVLQSX)
+    LOADSTACKINT($const_typeU32, MOVLQZX)
+    LOADSTACKINT($const_typeS16, MOVWQSX)
+    LOADSTACKINT($const_typeU16, MOVWQZX)
+    LOADSTACKINT($const_typeS8, MOVBQSX)
+    LOADSTACKINT($const_typeU8, MOVBQZX)
 
-    CMPB CX, $const_typeDouble
-    JNE 7(PC)
-    SUBQ $8, SP
-    MOVSD 0(R11), X0
-    MOVSD X0, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
+    LOADSTACKXMM($const_typeDouble, MOVSD)
+    LOADSTACKXMM($const_typeFloat, MOVSS)
 
-    SUBQ $8, SP
-    MOVSS 0(R11), X0
-    MOVSS X0, 0(SP)
-    TESTQ AX, AX
-    JZ reg
-    JMP next
+    INT $3
 
 reg:
     // load register arguments
@@ -220,76 +159,45 @@ prepared:
 
     MOVQ R14, SP
 
-    // store ret0
-    MOVLQSX Spec_ret0(R12), BX
+    // store ret
+    MOVLQSX Spec_ret(R12), BX
     TESTQ BX, BX
-    JS xmmret0
+    JS DONE
     MOVWQZX BX, R11
     SHRL $16, BX
     ADDQ R13, R11
+
     CMPB BX, $0
     JNE 3(PC)
     MOVQ AX, (R11)
-    JMP ret1
+    JMP DONE
+
     CMPB BX, $2
     JGT 3(PC)
     MOVL AX, (R11)
-    JMP ret1
+    JMP DONE
+
     CMPB BX, $4
     JGT 3(PC)
     MOVW AX, (R11)
-    JMP ret1
+    JMP DONE
+
+    CMPB BX, $6
+    JGT 3(PC)
     MOVB AX, (R11)
+    JMP DONE
 
-ret1:
-    // store ret1
-    MOVLQSX Spec_ret1(R12), BX
-    TESTQ BX, BX
-    JS DONE
-    MOVWQZX BX, R11
-    SHRL $16, BX
-    ADDQ R13, R11
-    CMPB BX, $0
-    JNE 3(PC)
-    MOVQ DX, (R11)
-    JMP ret1
-    CMPB BX, $2
-    JGT 3(PC)
-    MOVL DX, (R11)
-    JMP ret1
-    CMPB BX, $4
-    JGT 3(PC)
-    MOVW DX, (R11)
-    JMP ret1
-    MOVB DX, (R11)
-
-xmmret0:
-    // store xmmret0
-    MOVLQSX Spec_xmmret0(R12), BX
-    TESTQ BX, BX
-    JS DONE
-    MOVWQZX BX, R11
-    SHRL $16, BX
-    ADDQ R13, R11
-    CMPB BX, $7
+    CMPB BX, $const_typeFloat
     JNE 3(PC)
     MOVSD X0, (R11)
-    JMP xmmret1
-    MOVSS X0, (R11)
+    JMP DONE
 
-xmmret1:
-    // store xmmret1
-    MOVLQSX Spec_xmmret1(R12), BX
-    TESTQ BX, BX
-    JS DONE
-    MOVWQZX BX, R11
-    SHRL $16, BX
-    ADDQ R13, R11
-    CMPB BX, $7
+    CMPB BX, $const_typeDouble
     JNE 3(PC)
-    MOVSD X1, (R11)
-    JMP xmmret1
-    MOVSS X1, (R11)
+    MOVSS X0, (R11)
+    JMP DONE
+
+    INT $3
 
 DONE:
     RET
