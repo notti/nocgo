@@ -40,7 +40,7 @@ func fieldToOffset(k reflect.StructField) (argument, bool) {
 	switch k.Type.Kind() {
 	case reflect.Slice:
 		return argument{uint16(k.Offset + sliceOffset), type64}, false
-	case reflect.Int, reflect.Uint, reflect.Uint64, reflect.Int64, reflect.Ptr, reflect.Uintptr:
+	case reflect.Uint64, reflect.Int64, reflect.Ptr, reflect.Uintptr:
 		return argument{uint16(k.Offset), type64}, false
 	case reflect.Int32:
 		return argument{uint16(k.Offset), typeS32}, false

@@ -1,6 +1,7 @@
 package ffi
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 )
@@ -69,7 +70,7 @@ ARGS:
 			switch f.Type.Kind() {
 			case reflect.Slice:
 				spec.ret = argument{uint16(f.Offset + sliceOffset), type32}
-			case reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr:
+			case reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr:
 				spec.ret = argument{uint16(f.Offset), type32}
 			case reflect.Int16:
 				spec.ret = argument{uint16(f.Offset), typeS16}
@@ -94,7 +95,7 @@ ARGS:
 		case reflect.Uint64, reflect.Int64, reflect.Float64:
 			spec.stack = append(spec.stack, argument{uint16(f.Offset), type32})
 			spec.stack = append(spec.stack, argument{uint16(f.Offset + 4), type32})
-		case reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr, reflect.Float32:
+		case reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr, reflect.Float32:
 			spec.stack = append(spec.stack, argument{uint16(f.Offset), type32})
 		case reflect.Int16:
 			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeS16})
@@ -105,6 +106,7 @@ ARGS:
 		case reflect.Uint8, reflect.Bool:
 			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeU8})
 		default:
+			fmt.Println(f.Type.Kind())
 			panic("Unknown type")
 		}
 	}

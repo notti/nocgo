@@ -8,13 +8,13 @@ import (
 
 type dlopen struct {
 	filename []byte
-	flags    int
+	flags    int32
 	handle   uintptr `ffi:"ret"`
 }
 
 type dlclose struct {
 	handle uintptr
-	ret    int `ffi:"ret"`
+	ret    int32 `ffi:"ret"`
 }
 
 type dlsym struct {
