@@ -12,17 +12,17 @@ import (
 
 type testCall struct {
 	i1  uint16
-	i2  int
+	i2  int32
 	f1  float32
 	f2  float64
-	i3  int
-	i4  int
-	i5  int
-	i6  int
-	i7  int
-	i8  int
+	i3  int32
+	i4  int32
+	i5  int32
+	i6  int32
+	i7  int32
+	i8  int32
 	i9  int16
-	ret int `nocgo:"ret"`
+	ret int32 `nocgo:"ret"`
 }
 
 type printCall struct {
