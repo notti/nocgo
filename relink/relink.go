@@ -23,6 +23,10 @@ var defaults = map[string]def{
 		interp: "/lib64/ld-linux-x86-64.so.2",
 		libs:   []string{"libc.so.6", "libpthread.so", "libdl.so"},
 	},
+	"386_linux": def{
+		interp: "/lib/ld-linux.so.2",
+		libs:   []string{"libc.so.6", "libpthread.so", "libdl.so"},
+	},
 }
 
 type elfFile struct {

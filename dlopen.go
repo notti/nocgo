@@ -48,6 +48,9 @@ var dlerrorSpec = mustSpec(dlerror__dynload, dlerror{})
 func getLastError() error {
 	args := dlerror{}
 	dlerrorSpec.Call(unsafe.Pointer(&args))
+	if args.err == 0 {
+		return errors.New("Unknown dl error")
+	}
 	return errors.New(MakeGoString(args.err))
 }
 

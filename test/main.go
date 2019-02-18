@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"unsafe"
 
 	"github.com/notti/nocgo"
@@ -30,7 +31,17 @@ type printCall struct {
 func main() {
 	fmt.Println(os.Args) // check if startup works
 
-	l, err := nocgo.Open("libcalltest.so.1")
+	var lib string
+	switch runtime.GOARCH {
+	case "386":
+		lib = "libcalltest32.so.1"
+	case "amd64":
+		lib = "libcalltest64.so.1"
+	default:
+		log.Fatalln("Unknown arch ", runtime.GOARCH)
+	}
+
+	l, err := nocgo.Open(lib)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,6 +55,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Println(f1)
 
 	f2, err := l.Func("print_value", argsP)
 	if err != nil {

@@ -1,5 +1,5 @@
 #include "textflag.h"
-#include "nocgo.h"
+#include "go_asm.h"
 
 // runtime has #include "go_asm.h"
 // we need to fake the defines here:
@@ -97,7 +97,7 @@ TEXT ·asmcall(SB),NOSPLIT,$0
 
 next:
     DECQ AX
-    MOVQ 0(BX)(AX*argument__size), CX
+    MOVQ (BX)(AX*argument__size), CX
     //check type and push to stack
     MOVWQZX CX, R11
     SHRL $16, CX
