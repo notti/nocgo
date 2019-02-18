@@ -5,3 +5,8 @@ libcalltest64.so.1: test.c
 
 libcalltest32.so.1: test.c
 	$(CC) -g -shared -m32 -fPIC -Wl,-soname,libcalltest32.so.1 -o libcalltest32.so.1 test.c -lc
+
+clean:
+	rm -rf libcalltest32.so.1 libcalltest64.so.1
+
+.PHONY: clean
