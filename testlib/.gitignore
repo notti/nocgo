@@ -1,2 +1,3 @@
 testlib
-libcalltest.so.1
+libcalltest32.so.1
+libcalltest64.so.1
