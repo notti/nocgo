@@ -26,22 +26,22 @@ const (
 )
 
 type datatypeMap struct {
-	golang, C, Cgo string
+	golang, C, Cgo, Cgop string
 }
 
 var mappings = map[datatype]datatypeMap{
-	void:      {"", "void", ""},
-	i8:        {"int8", "char", "char"},
-	u8:        {"uint8", "unsigned char", "uchar"},
-	i16:       {"int16", "short", "short"},
-	u16:       {"uint16", "unsigned short", "ushort"},
-	i32:       {"int32", "int", "int"},
-	u32:       {"uint32", "unsigned int", "uint"},
-	i64:       {"int64", "long long", "longlong"},
-	u64:       {"uint64", "unsigned long long", "ulonglong"},
-	f32:       {"float32", "float", "float"},
-	f64:       {"float64", "double", "double"},
-	byteSlice: {"[]byte", "char *", "unsafe.Pointer"},
+	void:      {"", "void", "", ""},
+	i8:        {"int8", "char", "C.char", ""},
+	u8:        {"uint8", "unsigned char", "C.uchar", ""},
+	i16:       {"int16", "short", "C.short", ""},
+	u16:       {"uint16", "unsigned short", "C.ushort", ""},
+	i32:       {"int32", "int", "C.int", ""},
+	u32:       {"uint32", "unsigned int", "C.uint", ""},
+	i64:       {"int64", "long long", "C.longlong", ""},
+	u64:       {"uint64", "unsigned long long", "C.ulonglong", ""},
+	f32:       {"float32", "float", "C.float", ""},
+	f64:       {"float64", "double", "C.double", ""},
+	byteSlice: {"[]byte", "char *", "unsafe.Pointer", "*C.char"},
 }
 
 type Value struct {
@@ -96,7 +96,11 @@ func (a Arguments) C() string {
 func (a Arguments) Call() string {
 	args := make([]string, len(a))
 	for i, arg := range a {
-		args[i] = fmt.Sprintf("C.%s(%s)", mappings[arg.Type].Cgo, arg.Name)
+		if mappings[arg.Type].Cgo == "unsafe.Pointer" {
+			args[i] = fmt.Sprintf("(%s)(%s(&%s[0]))", mappings[arg.Type].Cgop, mappings[arg.Type].Cgo, arg.Name)
+		} else {
+			args[i] = fmt.Sprintf("%s(%s)", mappings[arg.Type].Cgo, arg.Name)
+		}
 	}
 	return strings.Join(args, ", ")
 }
@@ -114,9 +118,11 @@ func (a Arguments) Value() string {
 }
 
 type Test struct {
-	Name      string
-	Ret       Value
-	Arguments Arguments
+	Name            string
+	Ret             Value
+	Arguments       Arguments
+	CgoPre, CgoPost string
+	FFIPre, FFIPost string
 }
 
 func (t Test) FFI() string {
@@ -160,6 +166,10 @@ var bridge = template.Must(template.New("bridge").Parse(`package testlib
 {{range .}}// {{.Ret.C}} {{.Name}}({{.Arguments.C}});
 {{end}}import "C"
 
+import "unsafe"
+
+var _ = unsafe.Sizeof(0)
+
 {{range .}}func {{.Name}}({{.Arguments.Go}}) {{.Ret.Go}} {
 	{{if not .Ret.Void}}return {{.Ret.Go}}({{end}}C.{{.Name}}({{.Arguments.Call}}){{if not .Ret.Void}}){{end}}
 }
@@ -175,10 +185,12 @@ import (
 )
 
 {{range .}}func {{.TestName}}(t *testing.T) {
+	{{.CgoPre}}
 	{{if .Ret.Void}}{{.Name}}({{.Arguments.Value}}){{else}}ret := {{.Name}}({{.Arguments.Value}})
 	if ret != {{.Ret.GoData}} {
 		t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, ret)
 	}{{end}}
+	{{.CgoPost}}
 }
 
 {{end}}
@@ -203,12 +215,14 @@ import (
 var {{.Name}}Func ffi.Spec
 
 func {{.TestName}}(t *testing.T) {
+	{{.FFIPre}}
 	arg := &{{.Name}}Spec{ {{.DataInit}} }
 	t.Log({{.Name}}Func)
 	{{.Name}}Func.Call(unsafe.Pointer(arg)){{if not .Ret.Void}}
 	if arg.ret != {{.Ret.GoData}} {
 		t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, arg.ret)
 	}{{end}}
+	{{.FFIPost}}
 }
 
 {{end}}
@@ -269,78 +283,70 @@ func main() {
 	}
 	tests := []Test{
 		{
-			"empty",
-			Value{void, nil, nil},
-			Arguments{},
+			Name: "empty",
+			Ret:  Value{void, nil, nil},
 		},
 		{
-			"int1",
-			Value{i8, "10", "10"},
-			Arguments{},
+			Name: "int1",
+			Ret:  Value{i8, "10", "10"},
 		},
 		{
-			"int2",
-			Value{i8, "-10", "-10"},
-			Arguments{},
+			Name: "int2",
+			Ret:  Value{i8, "-10", "-10"},
 		},
 		{
-			"int3",
-			Value{u8, "10", "10"},
-			Arguments{},
+			Name: "int3",
+			Ret:  Value{u8, "10", "10"},
 		},
 		{
-			"int4",
-			Value{u8, "-10", "246"},
-			Arguments{},
+			Name: "int4",
+			Ret:  Value{u8, "-10", "246"},
 		},
 		{
-			"int5",
-			Value{u8, "a+b", "44"},
-			Arguments{
+			Name: "int5",
+			Ret:  Value{u8, "a+b", "44"},
+			Arguments: Arguments{
 				{"a", Value{u8, "100", nil}},
 				{"b", Value{u8, "200", nil}},
 			},
 		},
 		{
-			"int6",
-			Value{u64, "a", "100"},
-			Arguments{
+			Name: "int6",
+			Ret:  Value{u64, "a", "100"},
+			Arguments: Arguments{
 				{"a", Value{u8, "100", nil}},
 			},
 		},
 		{
-			"int7",
-			Value{u8, "a", "100"},
-			Arguments{
+			Name: "int7",
+			Ret:  Value{u8, "a", "100"},
+			Arguments: Arguments{
 				{"a", Value{u64, "100", nil}},
 			},
 		},
 		{
-			"intBig1",
-			Value{u64, "81985529216486895", "uint64(81985529216486895)"},
-			Arguments{},
+			Name: "intBig1",
+			Ret:  Value{u64, "81985529216486895", "uint64(81985529216486895)"},
 		},
 		{
-			"intBig2",
-			Value{u64, "a", "uint64(81985529216486895)"},
-			Arguments{
+			Name: "intBig2",
+			Ret:  Value{u64, "a", "uint64(81985529216486895)"},
+			Arguments: Arguments{
 				{"a", Value{u64, "81985529216486895", nil}},
 			},
 		},
 		{
-			"float1",
-			Value{f32, "10.5", "10.5"},
-			Arguments{},
+			Name: "float1",
+			Ret:  Value{f32, "10.5", "10.5"},
 		},
 		{
-			"float2",
-			Value{f64, "10.5", "10.5"},
-			Arguments{},
+			Name: "float2",
+			Ret:  Value{f64, "10.5", "10.5"},
 		},
 		{
-			"stackSpill1",
-			Value{i8, "a+b+c+d+e+f+g+h", "8"},
-			Arguments{
+			Name: "stackSpill1",
+			Ret:  Value{i8, "a+b+c+d+e+f+g+h", "8"},
+			Arguments: Arguments{
 				{"a", Value{i8, "1", nil}},
 				{"b", Value{i8, "1", nil}},
 				{"c", Value{i8, "1", nil}},
@@ -352,9 +358,9 @@ func main() {
 			},
 		},
 		{
-			"stackSpill2",
-			Value{f32, "a+b+c+d+e+f+g+h+i+j", "10"},
-			Arguments{
+			Name: "stackSpill2",
+			Ret:  Value{f32, "a+b+c+d+e+f+g+h+i+j", "10"},
+			Arguments: Arguments{
 				{"a", Value{f32, "1", nil}},
 				{"b", Value{f32, "1", nil}},
 				{"c", Value{f32, "1", nil}},
@@ -368,9 +374,9 @@ func main() {
 			},
 		},
 		{
-			"stackSpill3",
-			Value{i8, "ia+ib+ic+id+ie+f+ig+ih+fa+fb+fc+fd+fe+ff+fg+fh+fi+fj", "18"},
-			Arguments{
+			Name: "stackSpill3",
+			Ret:  Value{i8, "ia+ib+ic+id+ie+f+ig+ih+fa+fb+fc+fd+fe+ff+fg+fh+fi+fj", "18"},
+			Arguments: Arguments{
 				{"ia", Value{i8, "1", nil}},
 				{"ib", Value{i8, "1", nil}},
 				{"ic", Value{i8, "1", nil}},
@@ -392,9 +398,9 @@ func main() {
 			},
 		},
 		{
-			"stackSpill4",
-			Value{i8, "ia+ib+ic+id+ie+f+ig+ih+fa+fb+fc+fd+fe+ff+fg+fh+fi+fj", "18"},
-			Arguments{
+			Name: "stackSpill4",
+			Ret:  Value{i8, "ia+ib+ic+id+ie+f+ig+ih+fa+fb+fc+fd+fe+ff+fg+fh+fi+fj", "18"},
+			Arguments: Arguments{
 				{"ia", Value{i8, "1", nil}},
 				{"fa", Value{f32, "1", nil}},
 				{"ib", Value{i8, "1", nil}},
@@ -414,6 +420,24 @@ func main() {
 				{"fi", Value{f32, "1", nil}},
 				{"fj", Value{f32, "1", nil}},
 			},
+		},
+		{
+			Name: "funcall1",
+			Ret:  Value{i32, `sprintf(s, "test from C: %d %1.1f %s\n", a, b, c)`, "27"},
+			Arguments: Arguments{
+				{"s", Value{byteSlice, nil, "buf"}},
+				{"a", Value{i8, "-1", nil}},
+				{"b", Value{f32, "1.5", nil}},
+				{"c", Value{byteSlice, nil, `[]byte("gotest\000")`}},
+			},
+			CgoPre: "buf := make([]byte, 1024)",
+			CgoPost: `	if string(buf[:ret]) != "test from C: -1 1.5 gotest\n" {
+		t.Fatalf("Expected \"test from C: -1 1.5 gotest\n\", but got \"%s\"", string(buf[:ret]))
+	}`,
+			FFIPre: "buf := make([]byte, 1024)",
+			FFIPost: `	if string(buf[:arg.ret]) != "test from C: -1 1.5 gotest\n" {
+		t.Fatalf("Expected \"test from C: -1 1.5 gotest\n\", but got \"%s\"", string(buf[:arg.ret]))
+	}`,
 		},
 	}
 	if err := ccode.Execute(cfile, tests); err != nil {
