@@ -16,6 +16,7 @@ const (
 	typeU8     argtype = 4 // movblzx  unsigned 8  bit
 	typeDouble argtype = 5 // fld             64 bit
 	typeFloat  argtype = 6 // movss             32 bit
+	type64     argtype = 7
 	typeUnused argtype = 0xFFFF
 )
 
@@ -84,6 +85,8 @@ ARGS:
 				spec.ret = argument{uint16(f.Offset), typeFloat}
 			case reflect.Float64:
 				spec.ret = argument{uint16(f.Offset), typeDouble}
+			case reflect.Uint64, reflect.Int64:
+				spec.ret = argument{uint16(f.Offset), type64}
 			default:
 				panic("Unknown return Type")
 			}

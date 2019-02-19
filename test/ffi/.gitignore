@@ -1,2 +1,3 @@
-ffi.test
+ffi.test32
+ffi.test64
 ffi_test.go

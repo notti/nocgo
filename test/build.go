@@ -26,22 +26,22 @@ const (
 )
 
 type datatypeMap struct {
-	golang, C string
+	golang, C, Cgo string
 }
 
 var mappings = map[datatype]datatypeMap{
-	void:      {"", "void"},
-	i8:        {"int8", "char"},
-	u8:        {"uint8", "unsigned char"},
-	i16:       {"int16", "short"},
-	u16:       {"uint16", "unsigned short"},
-	i32:       {"int32", "int"},
-	u32:       {"uint32", "unsigned int"},
-	i64:       {"int64", "long"},
-	u64:       {"uint64", "unsigned long"},
-	f32:       {"float32", "float"},
-	f64:       {"float64", "double"},
-	byteSlice: {"[]byte", "char *"},
+	void:      {"", "void", ""},
+	i8:        {"int8", "char", "char"},
+	u8:        {"uint8", "unsigned char", "uchar"},
+	i16:       {"int16", "short", "short"},
+	u16:       {"uint16", "unsigned short", "ushort"},
+	i32:       {"int32", "int", "int"},
+	u32:       {"uint32", "unsigned int", "uint"},
+	i64:       {"int64", "long long", "longlong"},
+	u64:       {"uint64", "unsigned long long", "ulonglong"},
+	f32:       {"float32", "float", "float"},
+	f64:       {"float64", "double", "double"},
+	byteSlice: {"[]byte", "char *", "unsafe.Pointer"},
 }
 
 type Value struct {
@@ -96,7 +96,7 @@ func (a Arguments) C() string {
 func (a Arguments) Call() string {
 	args := make([]string, len(a))
 	for i, arg := range a {
-		args[i] = fmt.Sprintf("C.%s(%s)", mappings[arg.Type].C, arg.Name)
+		args[i] = fmt.Sprintf("C.%s(%s)", mappings[arg.Type].Cgo, arg.Name)
 	}
 	return strings.Join(args, ", ")
 }
@@ -291,6 +291,33 @@ func main() {
 		{
 			"int4",
 			Value{u8, "-10", "246"},
+			Arguments{},
+		},
+		{
+			"int5",
+			Value{u8, "a+b", "44"},
+			Arguments{
+				{"a", Value{u8, "100", nil}},
+				{"b", Value{u8, "200", nil}},
+			},
+		},
+		{
+			"int6",
+			Value{u64, "a", "100"},
+			Arguments{
+				{"a", Value{u8, "100", nil}},
+			},
+		},
+		{
+			"int7",
+			Value{u8, "a", "100"},
+			Arguments{
+				{"a", Value{u64, "100", nil}},
+			},
+		},
+		{
+			"intBig",
+			Value{u64, "81985529216486895", "uint64(81985529216486895)"},
 			Arguments{},
 		},
 		{
