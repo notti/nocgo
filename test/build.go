@@ -68,11 +68,11 @@ type Argument struct {
 }
 
 func (a Argument) Go() string {
-	return fmt.Sprint(a.Name, mappings[a.Type].golang)
+	return a.Name + " " + mappings[a.Type].golang
 }
 
 func (a Argument) C() string {
-	return fmt.Sprint(a.Name, mappings[a.Type].C)
+	return mappings[a.Type].C + " " + a.Name
 }
 
 type Arguments []Argument
@@ -96,7 +96,7 @@ func (a Arguments) C() string {
 func (a Arguments) Call() string {
 	args := make([]string, len(a))
 	for i, arg := range a {
-		args[i] = arg.Name
+		args[i] = fmt.Sprintf("C.%s(%s)", mappings[arg.Type].C, arg.Name)
 	}
 	return strings.Join(args, ", ")
 }
@@ -104,7 +104,7 @@ func (a Arguments) Call() string {
 func (a Arguments) Value() string {
 	args := make([]string, len(a))
 	for i, arg := range a {
-		if arg.GoData == nil {
+		if arg.GoData != nil {
 			args[i] = fmt.Sprint(arg.GoData)
 		} else {
 			args[i] = fmt.Sprint(arg.CData)
@@ -302,6 +302,84 @@ func main() {
 			"float2",
 			Value{f64, "10.5", "10.5"},
 			Arguments{},
+		},
+		{
+			"stackSpill1",
+			Value{i8, "a+b+c+d+e+f+g+h", "8"},
+			Arguments{
+				{"a", Value{i8, "1", nil}},
+				{"b", Value{i8, "1", nil}},
+				{"c", Value{i8, "1", nil}},
+				{"d", Value{i8, "1", nil}},
+				{"e", Value{i8, "1", nil}},
+				{"f", Value{i8, "1", nil}},
+				{"g", Value{i8, "1", nil}},
+				{"h", Value{i8, "1", nil}},
+			},
+		},
+		{
+			"stackSpill2",
+			Value{f32, "a+b+c+d+e+f+g+h+i+j", "10"},
+			Arguments{
+				{"a", Value{f32, "1", nil}},
+				{"b", Value{f32, "1", nil}},
+				{"c", Value{f32, "1", nil}},
+				{"d", Value{f32, "1", nil}},
+				{"e", Value{f32, "1", nil}},
+				{"f", Value{f32, "1", nil}},
+				{"g", Value{f32, "1", nil}},
+				{"h", Value{f32, "1", nil}},
+				{"i", Value{f32, "1", nil}},
+				{"j", Value{f32, "1", nil}},
+			},
+		},
+		{
+			"stackSpill3",
+			Value{i8, "ia+ib+ic+id+ie+f+ig+ih+fa+fb+fc+fd+fe+ff+fg+fh+fi+fj", "18"},
+			Arguments{
+				{"ia", Value{i8, "1", nil}},
+				{"ib", Value{i8, "1", nil}},
+				{"ic", Value{i8, "1", nil}},
+				{"id", Value{i8, "1", nil}},
+				{"ie", Value{i8, "1", nil}},
+				{"f", Value{i8, "1", nil}},
+				{"ig", Value{i8, "1", nil}},
+				{"ih", Value{i8, "1", nil}},
+				{"fa", Value{f32, "1", nil}},
+				{"fb", Value{f32, "1", nil}},
+				{"fc", Value{f32, "1", nil}},
+				{"fd", Value{f32, "1", nil}},
+				{"fe", Value{f32, "1", nil}},
+				{"ff", Value{f32, "1", nil}},
+				{"fg", Value{f32, "1", nil}},
+				{"fh", Value{f32, "1", nil}},
+				{"fi", Value{f32, "1", nil}},
+				{"fj", Value{f32, "1", nil}},
+			},
+		},
+		{
+			"stackSpill4",
+			Value{i8, "ia+ib+ic+id+ie+f+ig+ih+fa+fb+fc+fd+fe+ff+fg+fh+fi+fj", "18"},
+			Arguments{
+				{"ia", Value{i8, "1", nil}},
+				{"fa", Value{f32, "1", nil}},
+				{"ib", Value{i8, "1", nil}},
+				{"fb", Value{f32, "1", nil}},
+				{"ic", Value{i8, "1", nil}},
+				{"fc", Value{f32, "1", nil}},
+				{"id", Value{i8, "1", nil}},
+				{"fd", Value{f32, "1", nil}},
+				{"ie", Value{i8, "1", nil}},
+				{"fe", Value{f32, "1", nil}},
+				{"f", Value{i8, "1", nil}},
+				{"ff", Value{f32, "1", nil}},
+				{"ig", Value{i8, "1", nil}},
+				{"fg", Value{f32, "1", nil}},
+				{"ih", Value{i8, "1", nil}},
+				{"fh", Value{f32, "1", nil}},
+				{"fi", Value{f32, "1", nil}},
+				{"fj", Value{f32, "1", nil}},
+			},
 		},
 	}
 	if err := ccode.Execute(cfile, tests); err != nil {
