@@ -1,3 +1,5 @@
-testlib
+cgo_bridge.go
+cgo_test.go
+test.c
 libcalltest32.so.1
 libcalltest64.so.1
