@@ -5,6 +5,8 @@ package testlib
 // char int2();
 // unsigned char int3();
 // unsigned char int4();
+// float float1();
+// double float2();
 import "C"
 
 func empty()  {
@@ -25,6 +27,14 @@ func int3() uint8 {
 
 func int4() uint8 {
 	return uint8(C.int4())
+}
+
+func float1() float32 {
+	return float32(C.float1())
+}
+
+func float2() float64 {
+	return float64(C.float2())
 }
 
 

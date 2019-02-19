@@ -204,6 +204,7 @@ var {{.Name}}Func nocgo.Spec
 
 func {{.TestName}}(t *testing.T) {
 	arg := &{{.Name}}Spec{ {{.DataInit}} }
+	t.Log({{.Name}}Func)
 	{{.Name}}Func.Call(unsafe.Pointer(arg)){{if not .Ret.Void}}
 	if arg.ret != {{.Ret.GoData}} {
 		t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, arg.ret)
@@ -290,6 +291,16 @@ func main() {
 		{
 			"int4",
 			Value{u8, "-10", "246"},
+			Arguments{},
+		},
+		{
+			"float1",
+			Value{f32, "10.5", "10.5"},
+			Arguments{},
+		},
+		{
+			"float2",
+			Value{f64, "10.5", "10.5"},
 			Arguments{},
 		},
 	}

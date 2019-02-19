@@ -187,12 +187,12 @@ prepared:
     MOVB AX, (R11)
     JMP DONE
 
-    CMPB BX, $const_typeFloat
+    CMPB BX, $const_typeDouble
     JNE 3(PC)
     MOVSD X0, (R11)
     JMP DONE
 
-    CMPB BX, $const_typeDouble
+    CMPB BX, $const_typeFloat
     JNE 3(PC)
     MOVSS X0, (R11)
     JMP DONE
