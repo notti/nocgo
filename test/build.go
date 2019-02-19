@@ -316,9 +316,16 @@ func main() {
 			},
 		},
 		{
-			"intBig",
+			"intBig1",
 			Value{u64, "81985529216486895", "uint64(81985529216486895)"},
 			Arguments{},
+		},
+		{
+			"intBig2",
+			Value{u64, "a", "uint64(81985529216486895)"},
+			Arguments{
+				{"a", Value{u64, "81985529216486895", nil}},
+			},
 		},
 		{
 			"float1",
