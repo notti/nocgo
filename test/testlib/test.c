@@ -20,4 +20,12 @@ unsigned char int4() {
 	return -10;
 }
 
+float float1() {
+	return 10.5;
+}
+
+double float2() {
+	return 10.5;
+}
+
 

@@ -36,4 +36,18 @@ func TestInt4(t *testing.T) {
 	}
 }
 
+func TestFloat1(t *testing.T) {
+	ret := float1()
+	if ret != 10.5 {
+		t.Fatalf("Expected %v, but got %v\n", 10.5, ret)
+	}
+}
+
+func TestFloat2(t *testing.T) {
+	ret := float2()
+	if ret != 10.5 {
+		t.Fatalf("Expected %v, but got %v\n", 10.5, ret)
+	}
+}
+
 
