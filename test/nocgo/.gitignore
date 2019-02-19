@@ -1,1 +1,3 @@
-nocgo.test
+nocgo.test32
+nocgo.test64
+nocgo_test.go

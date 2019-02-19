@@ -91,6 +91,15 @@ prepared:
     FMOVD F0, (CX)
     JMP done
 
+    CMPB BX, $const_type64
+    JNE 5(PC)
+    MOVL Spec_base(SI), BX
+    ADDL BX, CX
+    MOVL AX, (CX)
+    ADDL $4, CX
+    MOVL DX, (CX)
+    JMP done
+
     INT $3
 
 done:
