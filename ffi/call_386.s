@@ -9,7 +9,7 @@
 #define slice_len 4
 #define slice_cap 8
 
-// func asmcall()
+// func asmcall(spec)
 TEXT ·asmcall(SB),NOSPLIT,$0-4
     MOVL frame+0(FP), SI // FRAME (preserved)
     MOVL SP, DI          // STACK (preserved)
@@ -103,43 +103,5 @@ prepared:
     INT $3
 
 done:
-
-    RET
-
-
-GLOBL pthread_attr_init__dynload(SB), NOPTR, $4
-GLOBL pthread_attr_getstacksize__dynload(SB), NOPTR, $4
-GLOBL pthread_attr_destroy__dynload(SB), NOPTR, $4
-
-TEXT x_cgo_init(SB),NOSPLIT,$512-4 // size_t size (8 byte) + unknown pthread_attr_t - hopefully this is big enough
-    // pthread_attr_init(4(SP))
-    LEAL 4(SP), AX
-    PUSHL AX
-    MOVL $pthread_attr_init__dynload(SB), AX
-    CALL (AX)
-    POPL AX
-
-    // pthread_attr_init(4(SP), 0(SP))
-    LEAL 0(SP), AX
-    PUSHL AX
-    LEAL 4(SP), AX
-    PUSHL AX
-    MOVL $pthread_attr_getstacksize__dynload(SB), AX
-    CALL (AX)
-    POPL AX
-    POPL AX
-
-    // g->stacklo = &size - size + 4096
-    LEAL 0x1000(SP), AX
-    SUBL 0(SP), AX
-    MOVL g+0(FP), BX
-    MOVL AX, (g_stack+stack_lo)(BX)
-
-    // pthread_attr_destroy(4(SP))
-    LEAL 4(SP), AX
-    PUSHL AX
-    MOVL $pthread_attr_destroy__dynload(SB), AX
-    CALL (AX)
-    POPL AX
 
     RET

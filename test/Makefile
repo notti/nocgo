@@ -6,4 +6,8 @@ all:
 verbose:
 	@make all TEST="-test.v"
 
+bench:
+	@make all TEST="-test.bench . -test.benchmem"
+
+
 .PHONY: all
