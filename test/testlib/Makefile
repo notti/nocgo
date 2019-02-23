@@ -8,5 +8,6 @@ libcalltest32.so.1: test.c
 
 test:
 	go test $(TEST)
+	CGO_ENABLED=1 GOARCH=386 go test $(TEST)
 
 .PHONY: test

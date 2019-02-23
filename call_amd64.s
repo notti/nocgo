@@ -3,8 +3,6 @@
 
 // runtime has #include "go_asm.h"
 // we need to fake the defines here:
-#define g_stack 0
-#define stack_lo 0
 #define slice_array 0
 #define slice_len 8
 #define slice_cap 16
@@ -72,7 +70,7 @@
     MOVSS 0(R11), target \ // float 32bit
 
 
-// func asmcall()
+// func asmcall(spec)
 TEXT ·asmcall(SB),NOSPLIT,$0
     MOVQ DI, R12      // FRAME (preserved)
     MOVQ Spec_base(R12), R13  // base
@@ -200,35 +198,4 @@ prepared:
     INT $3
 
 DONE:
-    RET
-
-
-GLOBL pthread_attr_init__dynload(SB), NOPTR, $8
-GLOBL pthread_attr_getstacksize__dynload(SB), NOPTR, $8
-GLOBL pthread_attr_destroy__dynload(SB), NOPTR, $8
-
-TEXT x_cgo_init(SB),NOSPLIT,$512 // size_t size (8 byte) + unknown pthread_attr_t - hopefully this is big enough
-    MOVQ DI, R12 // g
-
-    // pthread_attr_init(8(SP))
-    LEAQ 8(SP), DI
-    MOVQ $pthread_attr_init__dynload(SB), R11
-    CALL (R11)
-
-    // pthread_attr_init(8(SP), 0(SP))
-    LEAQ 8(SP), DI
-    LEAQ 0(SP), SI
-    MOVQ $pthread_attr_getstacksize__dynload(SB), R11
-    CALL (R11)
-
-    // g->stacklo = &size - size + 4096
-    LEAQ 0x1000(SP), AX
-    SUBQ 0(SP), AX
-    MOVQ AX, (g_stack+stack_lo)(R12)
-
-    // pthread_attr_init(8(SP))
-    LEAQ 8(SP), DI
-    MOVQ $pthread_attr_destroy__dynload(SB), R11
-    CALL (R11)
-
     RET

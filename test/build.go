@@ -123,6 +123,8 @@ type Test struct {
 	Arguments       Arguments
 	CgoPre, CgoPost string
 	NOCGOPre, NOCGOPost string
+	Bench           bool
+	Multitest       bool
 }
 
 func (t Test) NOCGO() string {
@@ -150,6 +152,10 @@ func (t Test) DataInit() string {
 
 func (t Test) TestName() string {
 	return "Test" + strings.Title(t.Name)
+}
+
+func (t Test) BenchmarkName() string {
+	return "Benchmark" + strings.Title(t.Name)
 }
 
 var ccode = template.Must(template.New("ccode").Parse(`#include <stdio.h>
@@ -192,7 +198,15 @@ import (
 	}{{end}}
 	{{.CgoPost}}
 }
-
+{{if .Bench}}
+func {{.BenchmarkName}}(b *testing.B) {
+	{{.CgoPre}}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		{{.Name}}({{.Arguments.Value}})
+	}
+}
+{{end}}
 {{end}}
 `))
 
@@ -214,6 +228,23 @@ import (
 
 var {{.Name}}Func nocgo.Spec
 
+{{if .Multitest}}
+func {{.TestName}}Multi(t *testing.T) {
+	for i:=0; i < 100; i++ {
+		t.Run("{{.TestName}}Multi", func(t *testing.T) {
+			t.Parallel()
+			{{.NOCGOPre}}
+			arg := &{{.Name}}Spec{ {{.DataInit}} }
+			t.Log({{.Name}}Func)
+			{{.Name}}Func.Call(unsafe.Pointer(arg)){{if not .Ret.Void}}
+			if arg.ret != {{.Ret.GoData}} {
+				t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, arg.ret)
+			}{{end}}
+			{{.NOCGOPost}}
+		})
+	}
+}
+{{else}}
 func {{.TestName}}(t *testing.T) {
 	{{.NOCGOPre}}
 	arg := &{{.Name}}Spec{ {{.DataInit}} }
@@ -224,7 +255,17 @@ func {{.TestName}}(t *testing.T) {
 	}{{end}}
 	{{.NOCGOPost}}
 }
-
+{{end}}
+{{if .Bench}}
+func {{.BenchmarkName}}(b *testing.B) {
+	{{.NOCGOPre}}
+	arg := &{{.Name}}Spec{ {{.DataInit}} }
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		{{.Name}}Func.Call(unsafe.Pointer(arg))
+	}
+}
+{{end}}
 {{end}}
 
 func TestMain(m *testing.M) {
@@ -248,21 +289,11 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	{{end}}	
-
+	{{end}}
+	
 	os.Exit(m.Run())
 }
 `))
-
-/*
-func BenchmarkCall(b *testing.B) {
-	arg := &testCall{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, -11, 12}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		f2.Call(unsafe.Pointer(arg))
-	}
-}
-*/
 
 func main() {
 	cfile, err := os.Create("testlib/test.c")
@@ -283,8 +314,9 @@ func main() {
 	}
 	tests := []Test{
 		{
-			Name: "empty",
-			Ret:  Value{void, nil, nil},
+			Name:  "empty",
+			Ret:   Value{void, nil, nil},
+			Bench: true,
 		},
 		{
 			Name: "int1",
@@ -340,8 +372,9 @@ func main() {
 			Ret:  Value{f32, "10.5", "10.5"},
 		},
 		{
-			Name: "float2",
-			Ret:  Value{f64, "10.5", "10.5"},
+			Name:  "float2",
+			Ret:   Value{f64, "10.5", "10.5"},
+			Bench: true,
 		},
 		{
 			Name: "stackSpill1",
@@ -396,6 +429,7 @@ func main() {
 				{"fi", Value{f32, "1", nil}},
 				{"fj", Value{f32, "1", nil}},
 			},
+			Bench: true,
 		},
 		{
 			Name: "stackSpill4",
@@ -438,6 +472,7 @@ func main() {
 			NOCGOPost: `	if string(buf[:arg.ret]) != "test from C: -1 1.5 gotest\n" {
 		t.Fatalf("Expected \"test from C: -1 1.5 gotest\n\", but got \"%s\"", string(buf[:arg.ret]))
 	}`,
+			Multitest: true,
 		},
 	}
 	if err := ccode.Execute(cfile, tests); err != nil {

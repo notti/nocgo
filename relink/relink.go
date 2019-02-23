@@ -501,6 +501,12 @@ func (e *elfFile) makeDynRel(symbols []RelSymbol) ([]byte, bool, uint64) {
 	return ret.Bytes(), rela, relsz
 }
 
+type cgoSymbol struct {
+	v uint64
+	f uint64
+	s uint64
+}
+
 func main() {
 	libsArg := flag.String("libs", "", "Load comma separated list of given libs instead of defaults")
 	interp := flag.String("interp", "", "Use given interp instead of default")
@@ -643,9 +649,7 @@ func main() {
 		Section: int(elf.SHN_UNDEF),
 	})
 
-	xCgoInit := uint64(0)
-	cgoInit := uint64(0)
-	cgoSize := uint64(0)
+	cgoLink := make(map[string]cgoSymbol)
 
 	for _, sym := range symbolList {
 		if strings.HasSuffix(sym.Name, "__dynload") {
@@ -668,24 +672,49 @@ func main() {
 				Section: int(elf.SHN_UNDEF),
 			})
 		}
-		if sym.Name == "x_cgo_init" {
-			xCgoInit = sym.Value
-		}
-		if sym.Name == "_cgo_init" {
+		if sym.Name == "iscgo" {
 			sec := f.e.Sections[sym.Section]
-			cgoInit = sym.Value - sec.Addr + sec.Offset
-			cgoSize = sym.Size
+			addr := sym.Value - sec.Addr + sec.Offset
+			switch sym.Size {
+			case 4:
+				f.Write32At(uint32(1), addr)
+			case 8:
+				f.Write64At(uint64(1), addr)
+			default:
+				log.Fatalln("Unknown symbol size", sym.Size)
+			}
+		}
+		if strings.HasPrefix(sym.Name, "x_cgo_") {
+			s := cgoLink[sym.Name[1:]]
+			s.f = sym.Value
+			cgoLink[sym.Name[1:]] = s
+		}
+		if strings.HasPrefix(sym.Name, "_cgo_") {
+			sec := f.e.Sections[sym.Section]
+			s := cgoLink[sym.Name]
+			s.v = sym.Value - sec.Addr + sec.Offset
+			s.s = sym.Size
+			cgoLink[sym.Name] = s
+		}
+		if strings.HasPrefix(sym.Name, "runtime._cgo_") {
+			sec := f.e.Sections[sym.Section]
+			s := cgoLink[sym.Name[8:]]
+			s.v = sym.Value - sec.Addr + sec.Offset
+			s.s = sym.Size
+			cgoLink[sym.Name[8:]] = s
 		}
 	}
 
-	if xCgoInit != 0 && cgoInit != 0 && cgoSize != 0 {
-		switch cgoSize {
-		case 4:
-			f.Write32At(uint32(xCgoInit), cgoInit)
-		case 8:
-			f.Write64At(xCgoInit, cgoInit)
-		default:
-			log.Fatalln("Unknown symbol size", cgoSize)
+	for name, sym := range cgoLink {
+		if sym.f != 0 && sym.v != 0 && sym.s != 0 {
+			switch sym.s {
+			case 4:
+				f.Write32At(uint32(sym.f), sym.v)
+			case 8:
+				f.Write64At(sym.f, sym.v)
+			default:
+				log.Fatalln("Unknown symbol size ", sym.s, " for ", name)
+			}
 		}
 	}
 
