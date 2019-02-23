@@ -649,8 +649,6 @@ func main() {
 		Section: int(elf.SHN_UNDEF),
 	})
 
-	cgoLink := make(map[string]cgoSymbol)
-
 	for _, sym := range symbolList {
 		if strings.HasSuffix(sym.Name, "__dynload") {
 			parts := strings.Split(sym.Name, ".")
@@ -671,50 +669,6 @@ func main() {
 				Vis:     elf.STV_DEFAULT,
 				Section: int(elf.SHN_UNDEF),
 			})
-		}
-		if sym.Name == "iscgo" {
-			sec := f.e.Sections[sym.Section]
-			addr := sym.Value - sec.Addr + sec.Offset
-			switch sym.Size {
-			case 4:
-				f.Write32At(uint32(1), addr)
-			case 8:
-				f.Write64At(uint64(1), addr)
-			default:
-				log.Fatalln("Unknown symbol size", sym.Size)
-			}
-		}
-		if strings.HasPrefix(sym.Name, "x_cgo_") {
-			s := cgoLink[sym.Name[1:]]
-			s.f = sym.Value
-			cgoLink[sym.Name[1:]] = s
-		}
-		if strings.HasPrefix(sym.Name, "_cgo_") {
-			sec := f.e.Sections[sym.Section]
-			s := cgoLink[sym.Name]
-			s.v = sym.Value - sec.Addr + sec.Offset
-			s.s = sym.Size
-			cgoLink[sym.Name] = s
-		}
-		if strings.HasPrefix(sym.Name, "runtime._cgo_") {
-			sec := f.e.Sections[sym.Section]
-			s := cgoLink[sym.Name[8:]]
-			s.v = sym.Value - sec.Addr + sec.Offset
-			s.s = sym.Size
-			cgoLink[sym.Name[8:]] = s
-		}
-	}
-
-	for name, sym := range cgoLink {
-		if sym.f != 0 && sym.v != 0 && sym.s != 0 {
-			switch sym.s {
-			case 4:
-				f.Write32At(uint32(sym.f), sym.v)
-			case 8:
-				f.Write64At(sym.f, sym.v)
-			default:
-				log.Fatalln("Unknown symbol size ", sym.s, " for ", name)
-			}
 		}
 	}
 
