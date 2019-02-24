@@ -41,7 +41,6 @@
 #define size_t__size 8
 
 // symbols we import from C
-GLOBL pthread_attr_init__dynload(SB), NOPTR, $8
 GLOBL pthread_attr_getstacksize__dynload(SB), NOPTR, $8
 GLOBL pthread_attr_destroy__dynload(SB), NOPTR, $8
 GLOBL pthread_sigmask__dynload(SB), NOPTR, $8

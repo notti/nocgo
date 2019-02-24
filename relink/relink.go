@@ -549,6 +549,18 @@ func main() {
 
 	// First some sanity checks - and checks if we can do our meddling, after all we don't support everything in this POC
 
+	symbolList, err := f.e.Symbols()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, sym := range symbolList {
+		if strings.HasSuffix(sym.Name, "nocgo.prelinked") {
+			log.Println("relink not needed")
+			return
+		}
+	}
+
 	if f.e.Type != elf.ET_EXEC {
 		log.Fatal("only static binaries not using an interp supported")
 	}
@@ -573,11 +585,6 @@ func main() {
 
 	if uint64(f.phoff+f.phentsize*uint64(len(f.e.Progs))) > f.e.Entry {
 		log.Fatal("Not enough space before entry point")
-	}
-
-	symbolList, err := f.e.Symbols()
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	for _, sym := range symbolList {

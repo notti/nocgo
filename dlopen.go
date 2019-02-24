@@ -27,11 +27,6 @@ type dlerror struct {
 	err uintptr `nocgo:"ret"`
 }
 
-var dlopen__dynload uintptr
-var dlclose__dynload uintptr
-var dlsym__dynload uintptr
-var dlerror__dynload uintptr
-
 func mustSpec(fn uintptr, args interface{}) Spec {
 	ret, err := makeSpec(fn, args)
 	if err != nil {
@@ -40,10 +35,10 @@ func mustSpec(fn uintptr, args interface{}) Spec {
 	return ret
 }
 
-var dlopenSpec = mustSpec(dlopen__dynload, dlopen{})
-var dlcloseSpec = mustSpec(dlclose__dynload, dlclose{})
-var dlsymSpec = mustSpec(dlsym__dynload, dlsym{})
-var dlerrorSpec = mustSpec(dlerror__dynload, dlerror{})
+var dlopenSpec = mustSpec(uintptr(unsafe.Pointer(dlopen__dynload)), dlopen{})
+var dlcloseSpec = mustSpec(uintptr(unsafe.Pointer(dlclose__dynload)), dlclose{})
+var dlsymSpec = mustSpec(uintptr(unsafe.Pointer(dlsym__dynload)), dlsym{})
+var dlerrorSpec = mustSpec(uintptr(unsafe.Pointer(dlerror__dynload)), dlerror{})
 
 func getLastError() error {
 	args := dlerror{}
@@ -95,6 +90,7 @@ func (l Library) Func(name string, args interface{}) (Spec, error) {
 	return makeSpec(a.addr, args)
 }
 
+// Value sets the given value (which must be pointer to pointer to the correct type) to the symbol given by name
 func (l Library) Value(name string, value interface{}) error {
 	v := reflect.ValueOf(value)
 	if v.Kind() != reflect.Ptr {
