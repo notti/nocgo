@@ -27,18 +27,51 @@ type dlerror struct {
 	err uintptr `nocgo:"ret"`
 }
 
-func mustSpec(fn uintptr, args interface{}) Spec {
-	ret, err := makeSpec(fn, args)
+func mustSpec(fn *byte, args interface{}) Spec {
+	ret, err := makeSpec(uintptr(unsafe.Pointer(fn)), args)
 	if err != nil {
 		panic(err)
 	}
 	return ret
 }
 
-var dlopenSpec = mustSpec(uintptr(unsafe.Pointer(dlopen__dynload)), dlopen{})
-var dlcloseSpec = mustSpec(uintptr(unsafe.Pointer(dlclose__dynload)), dlclose{})
-var dlsymSpec = mustSpec(uintptr(unsafe.Pointer(dlsym__dynload)), dlsym{})
-var dlerrorSpec = mustSpec(uintptr(unsafe.Pointer(dlerror__dynload)), dlerror{})
+// on 386 we need to do the dance of cgo_import_dynamic followed by two linknames,
+// definining a variable that gets the dynamic symbol, and then derefercing it.
+// Othwerwise we get an unknown relocation type error during linking
+
+//go:cgo_import_dynamic libc_dlopen dlopen "libdl.so"
+//go:linkname libc_dlopen libc_dlopen
+//go:linkname dlopen__dynload dlopen__dynload
+var libc_dlopen byte
+var dlopen__dynload = &libc_dlopen
+
+//go:cgo_import_dynamic libc_dlclose dlclose "libdl.so"
+//go:linkname libc_dlclose libc_dlclose
+//go:linkname dlclose__dynload dlclose__dynload
+var libc_dlclose byte
+var dlclose__dynload = &libc_dlclose
+
+//go:cgo_import_dynamic libc_dlsym dlsym "libdl.so"
+//go:linkname libc_dlsym libc_dlsym
+//go:linkname dlsym__dynload dlsym__dynload
+var libc_dlsym byte
+var dlsym__dynload = &libc_dlsym
+
+//go:cgo_import_dynamic libc_dlerror dlerror "libdl.so"
+//go:linkname libc_dlerror libc_dlerror
+//go:linkname dlerror__dynload dlerror__dynload
+var libc_dlerror byte
+var dlerror__dynload = &libc_dlerror
+
+// on amd64 we don't need the following line - on 386 we do...
+// anyway - with those lines the output is better (but doesn't matter) - without it on amd64 we get multiple DT_NEEDED with "libc.so.6" etc
+
+//go:cgo_import_dynamic _ _ "libdl.so"
+
+var dlopenSpec = mustSpec(dlopen__dynload, dlopen{})
+var dlcloseSpec = mustSpec(dlclose__dynload, dlclose{})
+var dlsymSpec = mustSpec(dlsym__dynload, dlsym{})
+var dlerrorSpec = mustSpec(dlerror__dynload, dlerror{})
 
 func getLastError() error {
 	args := dlerror{}
