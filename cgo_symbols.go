@@ -2,14 +2,6 @@ package nocgo
 
 import _ "unsafe" //needed for go:linkname
 
-var prelinked = true
-
-func init() {
-	if _Cgo_always_false {
-		_Cgo_use(prelinked)
-	}
-}
-
 //go:cgo_import_dynamic libc_pthread_attr_init pthread_attr_init "libpthread.so"
 //go:linkname libc_pthread_attr_init libc_pthread_attr_init
 //go:linkname pthread_attr_init__dynload pthread_attr_init__dynload
