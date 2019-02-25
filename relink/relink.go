@@ -1,3 +1,6 @@
+// This binary can rewrite static (go) binaries to include interp and use symbols from dynamic libraries
+// Symbols must be name symbol name__dynload
+
 package main
 
 import (

@@ -5,6 +5,7 @@ import (
 	"unsafe"
 )
 
+// sliceOffset is needed by MakeSpec
 var sliceOffset = reflect.TypeOf(reflect.SliceHeader{}).Field(0).Offset
 
 //go:linkname funcPC runtime.funcPC
@@ -42,36 +43,3 @@ func (spec Spec) Call(args unsafe.Pointer) {
 		_Cgo_use(spec)
 	}
 }
-
-//go:linkname _cgo_init _cgo_init
-//go:linkname x_cgo_init x_cgo_init
-var x_cgo_init byte
-var _cgo_init = &x_cgo_init
-
-//go:linkname x_cgo_thread_start x_cgo_thread_start
-//go:linkname _cgo_thread_start _cgo_thread_start
-var x_cgo_thread_start byte
-var _cgo_thread_start = &x_cgo_thread_start
-
-//go:linkname x_cgo_notify_runtime_init_done x_cgo_notify_runtime_init_done
-//go:linkname _cgo_notify_runtime_init_done _cgo_notify_runtime_init_done
-var x_cgo_notify_runtime_init_done byte
-var _cgo_notify_runtime_init_done = &x_cgo_notify_runtime_init_done
-
-//go:linkname x_cgo_setenv x_cgo_setenv
-//go:linkname _cgo_setenv runtime._cgo_setenv
-var x_cgo_setenv byte
-var _cgo_setenv = &x_cgo_setenv
-
-//go:linkname x_cgo_unsetenv x_cgo_unsetenv
-//go:linkname _cgo_unsetenv runtime._cgo_unsetenv
-var x_cgo_unsetenv byte
-var _cgo_unsetenv = &x_cgo_unsetenv
-
-//go:linkname x_cgo_callers x_cgo_callers
-//go:linkname _cgo_callers _cgo_callers
-var x_cgo_callers byte
-var _cgo_callers = &x_cgo_callers
-
-//go:linkname _iscgo runtime.iscgo
-var _iscgo = true

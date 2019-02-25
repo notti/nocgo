@@ -2,6 +2,49 @@ package nocgo
 
 import _ "unsafe" //needed for go:linkname
 
+// The following "fakes" all the necessary stuff for pretending we're using cgo, without actually doing that
+// -> iscgo will be set to true and all functions that are then required by the runtime implemented
+// This is necessary to get TLS working in the mainthread (cgo_init) and in all other threads (cgo_thread_start).
+// If we leave this out, libc can't use TLS since go runtime overwrites it (printf with %f already needs that)
+
+// The actual functions are implemented in assembly (cgo_*.s)
+
+//go:linkname _cgo_init _cgo_init
+//go:linkname x_cgo_init x_cgo_init
+var x_cgo_init byte
+var _cgo_init = &x_cgo_init
+
+//go:linkname x_cgo_thread_start x_cgo_thread_start
+//go:linkname _cgo_thread_start _cgo_thread_start
+var x_cgo_thread_start byte
+var _cgo_thread_start = &x_cgo_thread_start
+
+//go:linkname x_cgo_notify_runtime_init_done x_cgo_notify_runtime_init_done
+//go:linkname _cgo_notify_runtime_init_done _cgo_notify_runtime_init_done
+var x_cgo_notify_runtime_init_done byte
+var _cgo_notify_runtime_init_done = &x_cgo_notify_runtime_init_done
+
+//go:linkname x_cgo_setenv x_cgo_setenv
+//go:linkname _cgo_setenv runtime._cgo_setenv
+var x_cgo_setenv byte
+var _cgo_setenv = &x_cgo_setenv
+
+//go:linkname x_cgo_unsetenv x_cgo_unsetenv
+//go:linkname _cgo_unsetenv runtime._cgo_unsetenv
+var x_cgo_unsetenv byte
+var _cgo_unsetenv = &x_cgo_unsetenv
+
+//go:linkname x_cgo_callers x_cgo_callers
+//go:linkname _cgo_callers _cgo_callers
+var x_cgo_callers byte
+var _cgo_callers = &x_cgo_callers
+
+//go:linkname _iscgo runtime.iscgo
+var _iscgo = true
+
+// Now all the symbols we need to import from various libraries to implement the above functions:
+// (__dynload is an artifact of relink.go)
+
 //go:cgo_import_dynamic libc_pthread_attr_init pthread_attr_init "libpthread.so"
 //go:linkname libc_pthread_attr_init libc_pthread_attr_init
 //go:linkname pthread_attr_init__dynload pthread_attr_init__dynload
