@@ -3,8 +3,6 @@
 
 // runtime has #include "go_asm.h"
 // we need to fake the defines here:
-#define g_stack 0
-#define stack_lo 0
 #define slice_array 0
 #define slice_len 4
 #define slice_cap 8
