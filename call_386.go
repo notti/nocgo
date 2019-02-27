@@ -71,7 +71,7 @@ ARGS:
 			switch f.Type.Kind() {
 			case reflect.Slice:
 				spec.ret = argument{uint16(f.Offset + sliceOffset), type32}
-			case reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr:
+			case reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr, reflect.UnsafePointer:
 				spec.ret = argument{uint16(f.Offset), type32}
 			case reflect.Int16:
 				spec.ret = argument{uint16(f.Offset), typeS16}
