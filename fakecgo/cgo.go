@@ -1,3 +1,12 @@
+/*
+Package fakecgo fakes necessary functionality to support calling C-code (TLS initialization for main thread and subsequent threads).
+
+Usage
+
+Just import this library with
+	import _ "github.com/notti/nocgo/fakecgo"
+and enjoy the side effects (e.g., you can't use cgo any longer) :)
+*/
 package fakecgo
 
 import (

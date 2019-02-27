@@ -1,3 +1,4 @@
+// Example using libpcap to read packets from a networkdevice and decode them with gopacket.
 package main
 
 import (

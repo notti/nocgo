@@ -1,3 +1,4 @@
+// Test generator and tests
 package main
 
 import (
@@ -118,13 +119,13 @@ func (a Arguments) Value() string {
 }
 
 type Test struct {
-	Name            string
-	Ret             Value
-	Arguments       Arguments
-	CgoPre, CgoPost string
+	Name                string
+	Ret                 Value
+	Arguments           Arguments
+	CgoPre, CgoPost     string
 	NOCGOPre, NOCGOPost string
-	Bench           bool
-	Multitest       bool
+	Bench               bool
+	Multitest           bool
 }
 
 func (t Test) NOCGO() string {

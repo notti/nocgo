@@ -1,6 +1,6 @@
-// This binary can rewrite static (go) binaries to include interp and use symbols from dynamic libraries
-// Symbols must be name symbol name__dynload
-
+// [not needed] Relink rewrites static (go) binaries to include interp and use symbols from dynamic libraries.
+//
+// Symbols must be named <symbol name>__dynload
 package main
 
 import (

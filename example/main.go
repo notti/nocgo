@@ -1,3 +1,4 @@
+// Smoke test/example demonstrating accessing global variables and functions from a self compiled library.
 package main
 
 import (
