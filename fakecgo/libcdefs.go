@@ -5,9 +5,11 @@ import (
 	"unsafe"
 )
 
-// C-types (glibc version) we don't need to see what's inside pthread_attr and sigset_t -> byte arrays:
-type pthread_attr [56]byte // this is 36 on 386 - but too big doesn't hurt
-type sigset_t [128]byte
+// Wrapper functions to provide libc-functions for cgo.go
+
+// C-types (linux glibc, libc freebsd) we don't need to see what's inside pthread_attr and sigset_t -> byte arrays:
+type pthread_attr [56]byte // this is 36 on 386 glibc, 16 on amd64 freebsd - but too big doesn't hurt
+type sigset_t [128]byte    // this is 16 on amd64 freebsd - but too big doesn't hurt
 type size_t int
 type pthread_t int
 type timespec struct {

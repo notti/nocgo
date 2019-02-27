@@ -1,13 +1,13 @@
 all: libcalltest32.so.1 libcalltest64.so.1 test
 
 libcalltest64.so.1: test.c
-	$(CC) -g -shared -fPIC -Wl,-soname,libcalltest64.so.1 -o libcalltest64.so.1 test.c -lc
+	-$(CC) -g -shared -fPIC -Wl,-soname,libcalltest64.so.1 -o libcalltest64.so.1 test.c -lc
 
 libcalltest32.so.1: test.c
-	$(CC) -g -shared -m32 -fPIC -Wl,-soname,libcalltest32.so.1 -o libcalltest32.so.1 test.c -lc
+	-$(CC) -g -shared -m32 -fPIC -Wl,-soname,libcalltest32.so.1 -o libcalltest32.so.1 test.c -lc
 
 test:
-	go test $(TEST)
-	CGO_ENABLED=1 GOARCH=386 go test $(TEST)
+	-go test $(TEST)
+	-CGO_ENABLED=1 GOARCH=386 go test $(TEST)
 
 .PHONY: test
