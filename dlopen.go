@@ -81,7 +81,7 @@ func getLastError() error {
 	if args.err == 0 {
 		return errors.New("Unknown dl error")
 	}
-	return errors.New(MakeGoString(args.err))
+	return errors.New(MakeGoStringFromPointer(args.err))
 }
 
 // Library holds loaded library

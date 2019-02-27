@@ -7,16 +7,24 @@ func MakeCString(s string) []byte {
 	return append([]byte(s), 0)
 }
 
-// MakeGoString converts the given pointer to a null terminated C string to a go string
-func MakeGoString(s uintptr) string {
+// MakeGoStringFromPointer converts the given pointer to a null terminated C string to a go string
+func MakeGoStringFromPointer(s uintptr) string {
 	if s == 0 {
 		return ""
 	}
 	bval := (*[1 << 30]byte)(unsafe.Pointer(s))
-	for i := range bval {
-		if bval[i] == 0 {
-			return string(bval[:i])
+	return MakeGoStringFromSlice(bval[:])
+}
+
+// MakeGoStringFromSlice converts the given byte slice containing a null terminated C string to a go string
+func MakeGoStringFromSlice(s []byte) string {
+	if len(s) == 0 {
+		return ""
+	}
+	for i := range s {
+		if s[i] == 0 {
+			return string(s[:i])
 		}
 	}
-	return string(bval[:])
+	return string(s[:])
 }
