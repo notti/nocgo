@@ -1,4 +1,4 @@
-package nocgo
+package fakecgo
 
 import (
 	"reflect"
@@ -16,24 +16,6 @@ type timespec struct {
 }
 
 // We could take timespec from syscall - but there it uses int32 and int64 for 32 bit and 64 bit arch, which complicates stuff for us
-// end C-types
-
-// the following struct is cgothreadstart from runtime
-type threadstart struct {
-	g   unsafe.Pointer //should be guintptr
-	tls *uint64
-	fn  unsafe.Pointer
-}
-
-// just enough from the runtime to manipulate g->stack->lo/hi
-type stack struct {
-	lo uintptr
-	hi uintptr
-}
-
-type g struct {
-	stack stack
-}
 
 // for pthread_sigmask:
 

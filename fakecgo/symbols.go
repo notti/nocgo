@@ -1,4 +1,4 @@
-package nocgo
+package fakecgo
 
 import _ "unsafe" //needed for go:linkname
 

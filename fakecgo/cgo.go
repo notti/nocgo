@@ -1,4 +1,4 @@
-package nocgo
+package fakecgo
 
 import (
 	"syscall"
@@ -9,9 +9,6 @@ import (
 // -> e.g. use memmove for copying to pointers
 // go:nowritebarrierrec is only allowed inside runtime - so this has to be checked manually :(
 // The whole file is basically C-code written as go (yeah this somehow works, but needs the trampolines from cgo_*.s to fix calling convetions cdecl <-> go)
-
-//go:linkname memmove runtime.memmove
-func memmove(to, from unsafe.Pointer, n uintptr)
 
 // pthread_create will call this with ts as argument in a new thread -> this fixes up arguments to cgo (in assembly) and calls threadentry
 func threadentry_trampoline()
