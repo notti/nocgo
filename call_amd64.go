@@ -1,6 +1,7 @@
 package nocgo
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 )
@@ -36,30 +37,30 @@ type Spec struct {
 	rax     uint8
 }
 
-func fieldToOffset(k reflect.StructField) (argument, bool) {
+func fieldToOffset(k reflect.StructField) (argument, bool, error) {
 	switch k.Type.Kind() {
 	case reflect.Slice:
-		return argument{uint16(k.Offset + sliceOffset), type64}, false
+		return argument{uint16(k.Offset + sliceOffset), type64}, false, nil
 	case reflect.Uint64, reflect.Int64, reflect.Ptr, reflect.Uintptr, reflect.UnsafePointer:
-		return argument{uint16(k.Offset), type64}, false
+		return argument{uint16(k.Offset), type64}, false, nil
 	case reflect.Int32:
-		return argument{uint16(k.Offset), typeS32}, false
+		return argument{uint16(k.Offset), typeS32}, false, nil
 	case reflect.Uint32:
-		return argument{uint16(k.Offset), typeU32}, false
+		return argument{uint16(k.Offset), typeU32}, false, nil
 	case reflect.Int16:
-		return argument{uint16(k.Offset), typeS16}, false
+		return argument{uint16(k.Offset), typeS16}, false, nil
 	case reflect.Uint16:
-		return argument{uint16(k.Offset), typeU16}, false
+		return argument{uint16(k.Offset), typeU16}, false, nil
 	case reflect.Int8:
-		return argument{uint16(k.Offset), typeS8}, false
+		return argument{uint16(k.Offset), typeS8}, false, nil
 	case reflect.Uint8, reflect.Bool:
-		return argument{uint16(k.Offset), typeU8}, false
+		return argument{uint16(k.Offset), typeU8}, false, nil
 	case reflect.Float32:
-		return argument{uint16(k.Offset), typeFloat}, true
+		return argument{uint16(k.Offset), typeFloat}, true, nil
 	case reflect.Float64:
-		return argument{uint16(k.Offset), typeDouble}, true
+		return argument{uint16(k.Offset), typeDouble}, true, nil
 	}
-	panic("Unknown Type")
+	return argument{}, false, fmt.Errorf("Type %s of element %s not supported", k.Type.Kind(), k.Name)
 }
 
 // FIXME: we don't support stuff > 64 bit
@@ -102,12 +103,18 @@ ARGS:
 			}
 		}
 		if ret {
-			off, _ := fieldToOffset(f)
+			off, _, err := fieldToOffset(f)
+			if err != nil {
+				return Spec{}, err
+			}
 			spec.ret = off
 			// FIXME ret1/xmmret1! - only needed for types > 64 bit
 			continue
 		}
-		off, xmm := fieldToOffset(f)
+		off, xmm, err := fieldToOffset(f)
+		if err != nil {
+			return Spec{}, err
+		}
 		if xmm {
 			if xmmreg < 8 {
 				spec.xmmargs[xmmreg] = off

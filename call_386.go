@@ -88,7 +88,7 @@ ARGS:
 			case reflect.Uint64, reflect.Int64:
 				spec.ret = argument{uint16(f.Offset), type64}
 			default:
-				panic("Unknown return Type")
+				return Spec{}, fmt.Errorf("Type %s of element %s not supported", f.Type.Kind(), f.Name)
 			}
 			continue
 		}
@@ -109,8 +109,7 @@ ARGS:
 		case reflect.Uint8, reflect.Bool:
 			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeU8})
 		default:
-			fmt.Println(f.Type.Kind())
-			panic("Unknown type")
+			return Spec{}, fmt.Errorf("Type %s of element %s not supported", f.Type.Kind(), f.Name)
 		}
 	}
 	return spec, nil
