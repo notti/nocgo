@@ -8,21 +8,6 @@
 #define slice_cap 16
 
 
-/*
-    int:
-    type64:     movq              64 bit
-    typeS32:    movlqsx    signed 32 bit
-    typeU32:    movlqzx  unsigned 32 bit
-    typeS16:    movwqsx    signed 16 bit
-    typeU16:    movwqzx  unsigned 16 bit
-    typeS8:     movbqsx    signed 8  bit
-    typeU8:     movbqzx  unsigned 8  bit
-
-    float:
-    typeDouble: movsd             64 bit
-    typeFloat:  movss             32 bit
-*/
-
 #define LOADREG(off, target) \
     MOVLQSX Spec_intargs+argument__size*off(R12), AX \
     TESTQ AX, AX \

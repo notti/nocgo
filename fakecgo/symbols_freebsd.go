@@ -2,7 +2,8 @@ package fakecgo
 
 import _ "unsafe" // for go:linkname
 
-// on BSDs we need the following... which is not allowed outside cgo/stdlib :( - no way around that
+// on BSDs we need the following (this is from runtime/cgo/freebsd.go)... which is not allowed outside cgo/stdlib :( - no way around that
+// Right now we can fix that with -gcflags=github.com/notti/nocgo/fakecgo=-std during build - but that doesn't seem to work with go test
 
 //go:linkname _environ environ
 //go:linkname _progname __progname

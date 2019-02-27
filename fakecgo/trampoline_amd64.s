@@ -1,5 +1,5 @@
 /*
-    trampoline for emulating required C functions for cgo in go (see cgoGlue.go)
+    trampoline for emulating required C functions for cgo in go (see cgo.go)
     (we convert cdecl calling convention to go and vice-versa)
 
     Since we're called from go and call into C we can cheat a bit with the calling conventions:
@@ -44,18 +44,15 @@ TEXT ·setg_trampoline(SB),NOSPLIT,$0-16
     CALL AX
     RET
 
-// _cgo_notify_runtime_init_done (runtime/cgo/gcc_libinit.c)
 TEXT x_cgo_notify_runtime_init_done_trampoline(SB),NOSPLIT,$0
     CALL ·x_cgo_notify_runtime_init_done(SB)
     RET
 
-// _cgo_setenv(char **arg) (runtime/cgo/gcc_setenv.c)
 TEXT x_cgo_setenv_trampoline(SB),NOSPLIT,$8
     MOVQ DI, 0(SP)
     CALL ·x_cgo_setenv(SB)
     RET
 
-// _cgo_unsetenv(char *arg) (runtime/cgo/gcc_setenv.c)
 TEXT x_cgo_unsetenv_trampoline(SB),NOSPLIT,$8
     MOVQ DI, 0(SP)
     CALL ·x_cgo_unsetenv(SB)

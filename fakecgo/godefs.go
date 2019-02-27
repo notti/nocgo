@@ -24,3 +24,15 @@ type stack struct {
 type g struct {
 	stack stack
 }
+
+// We actually don't need the full thing - but this is the same as in runtime and makes possible integration simpler
+type libcall struct {
+	fn   uintptr
+	n    uintptr
+	args uintptr
+	r1   uintptr
+	r2   uintptr
+	err  uintptr
+}
+
+type libcFunc uintptr

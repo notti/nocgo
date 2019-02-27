@@ -2,16 +2,7 @@ package fakecgo
 
 import "unsafe"
 
-type libcall struct {
-	fn   uintptr
-	n    uintptr
-	args uintptr
-	r1   uintptr
-	r2   uintptr
-	err  uintptr
-}
-
-type libcFunc uintptr
+// wrapper functions to provide go func definitions with arguments
 
 func asmlibccall6(fn, n, args uintptr) uintptr
 

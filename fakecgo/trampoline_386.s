@@ -1,5 +1,5 @@
 /*
-    See cgo_amd64.s for explanations.
+    See trampoline_amd64.s for explanations.
 
     => we can use SI, DI, BX instead of the stack
 
@@ -15,7 +15,6 @@ TEXT x_cgo_init_trampoline(SB),NOSPLIT|NOFRAME,$0
     JMP ·x_cgo_init(SB)
     RET
 
-// _cgo_thread_start(ThreadStart *arg) (runtime/cgo/gcc_util.c)
 TEXT x_cgo_thread_start_trampoline(SB),NOSPLIT|NOFRAME,$0
     JMP ·x_cgo_thread_start(SB)
     RET

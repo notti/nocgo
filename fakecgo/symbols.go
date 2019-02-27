@@ -7,7 +7,7 @@ import _ "unsafe" //needed for go:linkname
 // This is necessary to get TLS working in the mainthread (cgo_init) and in all other threads (cgo_thread_start).
 // If we leave this out, libc can't use TLS since go runtime overwrites it (printf with %f already needs that)
 
-// The actual functions are implemented in assembly trampolines (cgo_*.s) that call into carefully crafted golang (cgoGlue.go)
+// The actual functions are implemented in assembly trampolines (trampoline_*.s) that call into carefully crafted golang (cgo.go)
 
 //go:linkname _cgo_init _cgo_init
 //go:linkname x_cgo_init_trampoline x_cgo_init_trampoline
@@ -34,6 +34,7 @@ var _cgo_setenv = &x_cgo_setenv_trampoline
 var x_cgo_unsetenv_trampoline byte
 var _cgo_unsetenv = &x_cgo_unsetenv_trampoline
 
+// let's pretend we have cgo:
 //go:linkname _iscgo runtime.iscgo
 var _iscgo = true
 

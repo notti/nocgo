@@ -5,12 +5,17 @@ import (
 	"unsafe"
 )
 
-// Write barriers (we will be called while go is in a state where this is not possible) and stack split (we will be on systemstack anyway) are _not_ allowed in here
+// WARNING: please read this before changing/improving anything
+// This here might look like (ugly) go - but it is actually somehow C-code written in go (basically stuff in runtime/cgo/)
+// Yeah this somehow works, but needs the trampolines from trampoline_*.s to fix calling conventions cdecl <-> go
+//
+// Beware that strings must end with a 0 byte to not confuse C-code we call
+//
+// Write barriers (we will be called while go is in a state where this is not possible) and stack split (we will be on systemstack anyway) are NOT allowed in here
 // -> e.g. use memmove for copying to pointers
 // go:nowritebarrierrec is only allowed inside runtime - so this has to be checked manually :(
-// The whole file is basically C-code written as go (yeah this somehow works, but needs the trampolines from cgo_*.s to fix calling convetions cdecl <-> go)
 
-// pthread_create will call this with ts as argument in a new thread -> this fixes up arguments to cgo (in assembly) and calls threadentry
+// pthread_create will call this with ts as argument in a new thread -> this fixes up arguments to go (in assembly) and calls threadentry
 func threadentry_trampoline()
 
 // here we will store a pointer to the provided setg func
@@ -24,6 +29,7 @@ func x_cgo_init(g *g, setg uintptr) {
 	var size size_t
 	var attr pthread_attr
 
+	// we need an extra variable here - otherwise go generates "safe" code, which is not allowed here
 	stackSp := uintptr(unsafe.Pointer(&size))
 
 	setg_func = setg
@@ -50,6 +56,7 @@ func x_cgo_thread_start(arg *threadstart) {
 		abort()
 	}
 
+	// *ts = *arg would cause a write barrier, which is not allowed
 	memmove(unsafe.Pointer(ts), unsafe.Pointer(arg), unsafe.Sizeof(threadstart{}))
 
 	_cgo_sys_start_thread((*threadstart)(unsafe.Pointer(ts)))
@@ -111,6 +118,8 @@ func threadentry(v unsafe.Pointer) uintptr {
 
 	return 0
 }
+
+// The following functions are required by the runtime - otherwise it complains via panic that they are missing
 
 // do nothing - we don't support being a library for now
 // _cgo_notify_runtime_init_done (runtime/cgo/gcc_libinit.c)

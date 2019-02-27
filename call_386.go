@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// 386 cdecl calling conventions: http://www.sco.com/developers/devspecs/abi386-4.pdf
+// Pass everything on the stack in right to left order
+// Return is in AX (and DX for 64 bit) or F0 for floats
+// according to libffi clang might require the caller to properly (sign)extend stuff - so we do that
+// structs are not supported for now (neither as argument nor as return value) - but this is not hard to do
+
 type argtype uint16
 
 const (

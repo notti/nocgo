@@ -6,6 +6,16 @@ import (
 	"strings"
 )
 
+// amd64 cdecl calling conventions: https://www.uclibc.org/docs/psABI-x86_64.pdf
+//   - Align the stack (should be 32byte aligned before the function is called - 16 byte is enough if we don't pass 256bit integers)
+//   - Pass first integer arguments in DI, SI, DX, CX, R8, R9
+//   - Pass first float arguments in X0-X7
+//   - Pass rest on the stack
+//   - Pass number of used float registers in AX
+// Return is in AX or X0 for floats
+// according to libffi clang might require the caller to properly (sign)extend stuff - so we do that
+// structs are not supported for now (neither as argument nor as return value) - but this is not hard to do
+
 type argtype uint16
 
 const (
