@@ -4,8 +4,6 @@ import (
 	"errors"
 	"reflect"
 	"unsafe"
-
-	_ "github.com/notti/nocgo/fakecgo" // get everything we need to fake cgo behaviour
 )
 
 type dlopen struct {
