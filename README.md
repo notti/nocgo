@@ -117,7 +117,7 @@ How does this work
 
 ### nocgo
 
-nocgo imports `dlopen`, `dlclose`, `dlerror`, `dlsym` via `cgo:_import_dynamic` in [dlopen_OS.go](dlopen_linux.go). `lib.Func` builds a specification on where to put which argument in [call_arch.go](call_amd64.go). `spec.Call` uses `cgocall` from the runtime to call an assembly function and pass the spec to it. This assembly function is implemented in call_arch.s and it uses the specification to place the arguments into the right places, calls the pointer provided by `dlsym` and then puts the return argument into the right place if needed.
+nocgo imports `dlopen`, `dlclose`, `dlerror`, `dlsym` via `go:cgo_import_dynamic` in [dlopen_OS.go](dlopen_linux.go). `lib.Func` builds a specification on where to put which argument in [call_arch.go](call_amd64.go). `spec.Call` uses `cgocall` from the runtime to call an assembly function and pass the spec to it. This assembly function is implemented in call_arch.s and it uses the specification to place the arguments into the right places, calls the pointer provided by `dlsym` and then puts the return argument into the right place if needed.
 
 This is basically what `libffi` does. So far cdecl for 386 (pass arguments on the stack in right to left order, return values are in AX/CX or ST0) and amd64 (pass arguments in registers DI, SI, DX, CX, R8, R9/X0-X7 and the stack in right to left order, number of floats in AX, fixup alignment of stack) are implemented.
 
