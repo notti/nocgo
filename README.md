@@ -38,7 +38,7 @@ Go type                                       | C Type
 
 The last line means that slices and pointers are mapped to pointers in C. Pointers to structs are possible.
 
-Passing `struct`s and `complex` is not (yet) supported.
+Passing `struct`, `complex`, and callback functions is not (yet) supported.
 
 > **WARNING** `struct`s that are referenced **must** follow C alignment rules! There is **no** type checking, since this is actually not possible due to libraries not knowing their types...
 
@@ -100,7 +100,7 @@ Supported Systems
 * FreeBSD<br>
   *Errata:* FreeBSD requires the exported symbols `_environ` and `_progname`. This is only possible inside cgo or stdlib. So for building on FreeBSD, `-gcflags=github.com/notti/nocgo/fakecgo=-std` is required (This doesn't seem to work for `go test` - so examples work, but test does not)).
 
-With some small modifications probably all systems providing `dlopen` can be supported. Have a look at dlopen_OS.go and symbols_OS.go in fakecgo.
+With some small modifications probably all systems providing `dlopen` can be supported. Have a look at [dlopen_OS.go](dlopen_linux.go) and [symbols_OS.go](fakecgo/symbols_linux.go) in fakecgo.
 
 Supported Architectures
 -----------------------
@@ -110,14 +110,14 @@ Supported Architectures
 
 Implementing further architectures requires
 * Building trampolines for [fakecgo](fakecgo) (see below)
-* Implementing the cdecl callspec in call_.go/.s
+* Implementing the cdecl callspec in [call_.go](call_amd64.go)/[.s](call_amd64.s)
 
 How does this work
 ------------------
 
 ### nocgo
 
-nocgo imports `dlopen`, `dlclose`, `dlerror`, `dlsym` via `cgo:_import_dynamic` in dlopen_OS.go. `lib.Func` builds a specification on where to put which argument in call_arch.go. `spec.Call` uses `cgocall` from the runtime to call an assembly function and pass the spec to it. This assembly function is implemented in call_arch.s and it uses the specification to place the arguments into the right places, calls the pointer provided by `dlsym` and then puts the return argument into the right place if needed.
+nocgo imports `dlopen`, `dlclose`, `dlerror`, `dlsym` via `cgo:_import_dynamic` in [dlopen_OS.go](dlopen_linux.go). `lib.Func` builds a specification on where to put which argument in [call_arch.go](call_amd64.go). `spec.Call` uses `cgocall` from the runtime to call an assembly function and pass the spec to it. This assembly function is implemented in call_arch.s and it uses the specification to place the arguments into the right places, calls the pointer provided by `dlsym` and then puts the return argument into the right place if needed.
 
 This is basically what `libffi` does. So far cdecl for 386 (pass arguments on the stack in right to left order, return values are in AX/CX or ST0) and amd64 (pass arguments in registers DI, SI, DX, CX, R8, R9/X0-X7 and the stack in right to left order, number of floats in AX, fixup alignment of stack) are implemented.
 
@@ -149,14 +149,39 @@ So I started out with reimplementing those in go assembly (remember: we want to 
 
 Aaaand we can:
 
-fakecgo/trampoline_arch.s contains the above mentioned entry points, and "converts" the C-calling conventions to go calling conventions (e.g. move register passed arguments to the stack). Then it calls the go functions in fakecgo/cgo.go.
+[fakecgo/trampoline_arch.s](fakecgo/trampoline_amd64.s) contains the above mentioned entry points, and "converts" the C-calling conventions to go calling conventions (e.g. move register passed arguments to the stack). Then it calls the go functions in [fakecgo/cgo.go](fakecgo/cgo.go).
 
-Ok - but we still need all those pthread anc C-functions. Well we can import the symbols (like with `dlopen`). So all we need is a way to call those:
+Ok - but we still need all those pthread and C-library-functions. Well we can import the symbols (like with `dlopen`). So all we need is a way to call those:
 
-The trampoline file also contains an `asmlibccall6` function that can call C-functions with a maximum of 6 integer arguments and one return value. fakecgo/libccall.go maps this onto more convenient go functions with 1-6 arguments and fakecgo/libcdefs.go further maps those into nice functions that look like the C functions (e.g. `func pthread_create(thread *pthread_t, attr *pthread_attr, start, arg unsafe.Pointer) int32`). Well this was not exactly my idea - the runtime already does that for solaris and darwin (runtime/os_solaris.go, runtime/syscall_solaris.go, runtime/sys_solaris_amd64.s)!
+The trampoline file also contains an `asmlibccall6` function that can call C-functions with a maximum of 6 integer arguments and one return value. [fakecgo/libccall.go](fakecgo/libccall.go) maps this onto more convenient go functions with 1-6 arguments and [fakecgo/libcdefs.go](fakecgo/libcdefs.go) further maps those into nice functions that look like the C functions (e.g. `func pthread_create(thread *pthread_t, attr *pthread_attr, start, arg unsafe.Pointer) int32`). Well this was not exactly my idea - the runtime already does that for solaris and darwin (runtime/os_solaris.go, runtime/syscall_solaris.go, runtime/sys_solaris_amd64.s) - although my implementation here is kept a bit simpler since it only ever will be called from gocode pretending to be C.
 
-So now we can implement all the above mentioned cgo functions in pure (but sometimes a bit ugly) go in fakecgo/cgo.go. Ugly, because those functions are called with lots of functionality missing! Writebarriers are **not** allowed, as are stack splits.
+So now we can implement all the above mentioned cgo functions in pure (but sometimes a bit ugly) go in [fakecgo/cgo.go](fakecgo/cgo.go). Ugly, because those functions are called with lots of functionality missing! Writebarriers are **not** allowed, as are stack splits.
 
 The upside is, that the only arch dependent stuff are the trampolines (in assembly) and the only OS dependent stuff are the symbol imports.
 
 Except for freebsd (which needs two exported symbols, as mentioned above) all those things work outside the runtime and no special treatment is needed. Just import fakecgo and all the cgo setup just works (except if you use cgo at the same time - then the linker will complain).
+
+Benchmarks
+----------
+
+This will be a bit slower than cgo. Most of this is caused by argument rearranging:
+
+### 386
+
+```
+name           old time/op    new time/op    delta
+Empty-4          89.8ns ±12%    85.6ns ± 5%      ~     (p=0.481 n=10+10)
+Float2-4         84.6ns ± 1%   215.8ns ± 2%  +154.91%  (p=0.000 n=8+9)
+StackSpill3-4     118ns ± 5%     126ns ± 5%    +7.07%  (p=0.000 n=10+8)
+```
+
+Float is so slow since that type is at the end of the comparison chain.
+
+### amd64
+
+```
+name           old time/op    new time/op    delta
+Empty-4          70.1ns ± 8%    73.9ns ± 3%   +5.36%  (p=0.026 n=10+9)
+Float2-4         72.0ns ± 4%    90.9ns ± 4%  +26.20%  (p=0.000 n=10+10)
+StackSpill3-4    88.5ns ± 4%   117.2ns ± 1%  +32.52%  (p=0.000 n=10+8)
+```

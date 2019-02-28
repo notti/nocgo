@@ -7,7 +7,7 @@ Usage
 
 Don't use this in production! This is meant as a PoC for golang and subject to changes.
 
-So far only floats, integers, and pointers are supported (No structs and no complex types, but that wouldn't be hard to implement).
+So far only floats, integers, and pointers are supported (No structs, no complex types, and no callbacks, but that wouldn't be hard to implement).
 See example, examplelibpcap, and the documentation below for examples.
 
 Go to C type mappings
