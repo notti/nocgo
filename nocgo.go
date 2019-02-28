@@ -1,4 +1,4 @@
-package nocgo 
+package nocgo
 
 import (
 	"reflect"
@@ -25,6 +25,11 @@ var _Cgo_always_false bool
 func _Cgo_use(interface{})
 
 // Call calls the given spec with the given arguments
+//
+// WARNING! There are no checks if args matches Spec right now! Be carefull.
+// Additionally, args must be on the heap.
+//
+// See func (Library) Func for an example.
 func (spec Spec) Call(args unsafe.Pointer) {
 	spec.base = uintptr(args)
 

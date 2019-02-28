@@ -2,6 +2,8 @@ package fakecgo
 
 // we have to use the 3 argument format here :( - 2 argument format is only allowed from inside cgo
 
+// pthread_attr_init will get us the wrong version on glibc - but this doesn't matter, since the memory we provide is zeroed - which will lead the correct result again
+
 //go:cgo_import_dynamic libc_pthread_attr_init_x pthread_attr_init "libpthread.so"
 //go:cgo_import_dynamic libc_pthread_attr_getstacksize_x pthread_attr_getstacksize "libpthread.so"
 //go:cgo_import_dynamic libc_pthread_attr_destroy_x pthread_attr_destroy "libpthread.so"

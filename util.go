@@ -2,7 +2,7 @@ package nocgo
 
 import "unsafe"
 
-// MakeCString converts the given string to a null terminated C string
+// MakeCString converts the given string to a null terminated C byte-slice/char array
 func MakeCString(s string) []byte {
 	return append([]byte(s), 0)
 }

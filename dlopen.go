@@ -69,10 +69,10 @@ func getLastError() error {
 	return errors.New(MakeGoStringFromPointer(args.err))
 }
 
-// Library holds loaded library
+// Library holds the handle to a loaded library
 type Library uintptr
 
-// Open opens the given dynamic library and returns a handle for loading symbols and functions
+// Open opens the given dynamic library and returns a handle for loading symbols and functions.
 func Open(library string) (Library, error) {
 	args := dlopen{
 		filename: MakeCString(library),
@@ -85,7 +85,7 @@ func Open(library string) (Library, error) {
 	return 0, getLastError()
 }
 
-// Close closes the library
+// Close closes the library. This might also release all resources. Any Func and Value calls on the Library after this point can give unexpected results.
 func (l Library) Close() error {
 	args := dlclose{
 		handle: uintptr(l),
@@ -97,7 +97,26 @@ func (l Library) Close() error {
 	return getLastError()
 }
 
-// Func returns a callable spec for the given symbol name and argument specification
+// Func returns a callable spec for the given symbol name and argument specification.
+//
+// WARNING! This does not and cannot check if the size of the given type is correct!
+//
+// Example:
+//	type putsArgs struct {
+//		s []byte
+//		num int32 `nocgo:"ret"`  // this marks the return value
+//	}
+//	puts, err := lib.Func("puts", putsArgs{})
+//	if err != nil {
+//		//handle error; err will contain an error message from dlerror, or if something went wrong with building the spec
+//	}
+//	var args := putsArgs{
+//		s: nocgo.MakeCString("hello world!\n")
+//	}
+//	puts.Call(&args)
+//	fmt.Printf("Successfully printed %d characters from C!\n", args.num)
+//
+// See package documentation for an explanation of C-types
 func (l Library) Func(name string, args interface{}) (Spec, error) {
 	a := dlsym{
 		handle: uintptr(l),
@@ -110,7 +129,19 @@ func (l Library) Func(name string, args interface{}) (Spec, error) {
 	return makeSpec(a.addr, args)
 }
 
-// Value sets the given value (which must be pointer to pointer to the correct type) to the symbol given by name
+// Value sets the given value (which must be pointer to pointer to the correct type) to the global symbol given by name.
+//
+// WARNING! This does not and cannot check if the size of the given type is correct! This might be possibly dangerous.
+// See above for an explanation of C-types.
+//
+// Example:
+// 	var value *int32
+//	if err := lib.Value("some_value", &value); err != nil {
+//		//handle error; error will contain an error message from dlerror
+//	}
+//
+//	// *value now is the contents of the global symbol in the library
+//	fmt.Printf(*value)
 func (l Library) Value(name string, value interface{}) error {
 	v := reflect.ValueOf(value)
 	if v.Kind() != reflect.Ptr {
