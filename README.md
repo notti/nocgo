@@ -1,6 +1,8 @@
 nocgo
 =====
 
+At the moment only go1.11 is supported. go1.12 causes some problems with nosplit.
+
 [![GoDoc](https://godoc.org/github.com/notti/nocgo?status.svg)](https://godoc.org/github.com/notti/nocgo)
 
 This repository/package contains a *proof of concept* for calling into C code *without* using cgo.
