@@ -1,7 +1,7 @@
 nocgo
 =====
 
-At the moment only go1.11 is supported. go1.12 causes some problems with nosplit.
+Tested on go1.11 and go1.12.
 
 [![GoDoc](https://godoc.org/github.com/notti/nocgo?status.svg)](https://godoc.org/github.com/notti/nocgo)
 
