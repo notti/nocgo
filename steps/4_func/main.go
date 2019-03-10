@@ -14,12 +14,13 @@ func callWrapper()
 type funcStorage struct {
 	code    uintptr
 	argsize uintptr
+	retsize uintptr
 	value   int
 }
 
-func fake(s *funcStorage, i *[2]int) int {
+func fake(s *funcStorage, i *[2]int) int64 {
 	fmt.Println("in fake: ", s.value, i[0], i[1])
-	return i[0] + 100 + s.value
+	return int64(i[0] + 100 + s.value)
 }
 
 var alignSize = unsafe.Sizeof(uintptr(0))
@@ -35,15 +36,20 @@ func emulate(x reflect.Value) {
 		size = (size + alignSize - 1) &^ (alignSize - 1)
 		toassign.argsize += size
 	}
+	for i := 0; i < ftype.NumOut(); i++ {
+		size := ftype.Out(i).Size()
+		size = (size + alignSize - 1) &^ (alignSize - 1)
+		toassign.retsize += size
+	}
 	toassign.value = -5
 	*(*unsafe.Pointer)(unsafe.Pointer(fptr)) = unsafe.Pointer(toassign)
 	fmt.Println(toassign)
 }
 
 func main() {
-	var test func(int, byte, int) int
-	var test1 func(int, int) int
-	var test2 func(int, string) int
+	var test func(int, byte, int) int64
+	var test1 func(int, int) int64
+	var test2 func(int, string) int64
 
 	emulate(reflect.ValueOf(&test))
 	emulate(reflect.ValueOf(&test1))
@@ -60,5 +66,4 @@ func main() {
 	fmt.Println("test2 1: ", test2(10, "1, 2"))
 	fmt.Println("test2 2: ", test2(11, "2, 3"))
 	fmt.Println("test2 3: ", test2(12, "3, 4"))
-
 }
