@@ -68,11 +68,6 @@ func x_cgo_thread_start(arg *threadstart) {
 	// *ts = *arg would cause a write barrier, which is not allowed
 	memmove(unsafe.Pointer(ts), unsafe.Pointer(arg), unsafe.Sizeof(threadstart{}))
 
-	_cgo_sys_start_thread((*threadstart)(unsafe.Pointer(ts)))
-}
-
-//go:nosplit
-func _cgo_sys_start_thread(ts *threadstart) {
 	var attr pthread_attr
 	var ign, oset sigset_t
 	var p pthread_t
@@ -83,8 +78,22 @@ func _cgo_sys_start_thread(ts *threadstart) {
 
 	pthread_attr_init(&attr)
 	pthread_attr_getstacksize(&attr, &size)
-	(*g)(ts.g).stack.hi = uintptr(size)
-	err := _cgo_try_pthread_create(&p, &attr, unsafe.Pointer(funcPC(threadentry_trampoline)), unsafe.Pointer(ts))
+	(*g)((*threadstart)(unsafe.Pointer(ts)).g).stack.hi = uintptr(size)
+
+	var err int32
+
+	for tries := 0; tries < 20; tries++ {
+		err = pthread_create(&p, &attr, unsafe.Pointer(funcPC(threadentry_trampoline)), unsafe.Pointer(ts))
+		if err == 0 {
+			pthread_detach(p)
+			break
+		}
+		if err != int32(syscall.EAGAIN) {
+			break
+		}
+		ts := timespec{tv_sec: 0, tv_nsec: (tries + 1) * 1000 * 1000}
+		nanosleep(&ts, nil)
+	}
 
 	pthread_sigmask(SIG_SETMASK, &oset, nil)
 
@@ -92,23 +101,6 @@ func _cgo_sys_start_thread(ts *threadstart) {
 		dprintf(2, "pthread_create failed: %s\n\000", strerror(err))
 		abort()
 	}
-}
-
-//go:nosplit
-func _cgo_try_pthread_create(thread *pthread_t, attr *pthread_attr, start, arg unsafe.Pointer) int32 {
-	for tries := 0; tries < 20; tries++ {
-		err := pthread_create(thread, attr, start, arg)
-		if err == 0 {
-			pthread_detach(*thread)
-			return 0
-		}
-		if err != int32(syscall.EAGAIN) {
-			return err
-		}
-		ts := timespec{tv_sec: 0, tv_nsec: (tries + 1) * 1000 * 1000}
-		nanosleep(&ts, nil)
-	}
-	return int32(syscall.EAGAIN)
 }
 
 func setg_trampoline(uintptr, unsafe.Pointer)
