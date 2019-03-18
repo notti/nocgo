@@ -131,21 +131,22 @@ type Test struct {
 func (t Test) NOCGO() string {
 	args := make([]string, len(t.Arguments))
 	for i, arg := range t.Arguments {
-		args[i] = "\t" + arg.Go()
+		args[i] = arg.Go()
 	}
+	ret := "(" + strings.Join(args, ", ") + ")"
 	if !t.Ret.Void() {
-		args = append(args, fmt.Sprint("\tret ", t.Ret.Go(), " `nocgo:\"ret\"`"))
+		ret += " " + t.Ret.Go()
 	}
-	return strings.Join(args, "\n")
+	return ret
 }
 
 func (t Test) DataInit() string {
 	args := make([]string, len(t.Arguments))
 	for i, arg := range t.Arguments {
 		if arg.GoData == nil {
-			args[i] = fmt.Sprintf("%s: %s", arg.Name, arg.CData)
+			args[i] = fmt.Sprint(arg.CData)
 		} else {
-			args[i] = fmt.Sprintf("%s: %s", arg.Name, arg.GoData)
+			args[i] = fmt.Sprint(arg.GoData)
 		}
 	}
 	return strings.Join(args, ", ")
@@ -218,56 +219,44 @@ import (
 	"os"
 	"runtime"
 	"testing"
-	"unsafe"
 
 	"github.com/notti/nocgo"
 )
 
-{{range .}}type {{.Name}}Spec struct {
-{{.NOCGO}}
-}
+{{range .}}
 
-var {{.Name}}Func nocgo.Spec
+var {{.Name}}Func func{{.NOCGO}}
 
-{{if .Multitest}}
-func {{.TestName}}Multi(t *testing.T) {
+{{if .Multitest}}func {{.TestName}}Multi(t *testing.T) {
 	for i:=0; i < 100; i++ {
 		t.Run("{{.TestName}}Multi", func(t *testing.T) {
 			t.Parallel()
 			{{.NOCGOPre}}
-			arg := &{{.Name}}Spec{ {{.DataInit}} }
-			t.Log({{.Name}}Func)
-			{{.Name}}Func.Call(unsafe.Pointer(arg)){{if not .Ret.Void}}
-			if arg.ret != {{.Ret.GoData}} {
-				t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, arg.ret)
+			{{if not .Ret.Void}}ret := {{end}}{{.Name}}Func({{.DataInit}}){{if not .Ret.Void}}
+			if ret != {{.Ret.GoData}} {
+				t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, ret)
 			}{{end}}
 			{{.NOCGOPost}}
 		})
 	}
 }
-{{else}}
-func {{.TestName}}(t *testing.T) {
+{{else}}func {{.TestName}}(t *testing.T) {
 	{{.NOCGOPre}}
-	arg := &{{.Name}}Spec{ {{.DataInit}} }
-	t.Log({{.Name}}Func)
-	{{.Name}}Func.Call(unsafe.Pointer(arg)){{if not .Ret.Void}}
-	if arg.ret != {{.Ret.GoData}} {
-		t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, arg.ret)
+	{{if not .Ret.Void}}ret := {{end}}{{.Name}}Func({{.DataInit}}){{if not .Ret.Void}}
+	if ret != {{.Ret.GoData}} {
+		t.Fatalf("Expected %v, but got %v\n", {{.Ret.GoData}}, ret)
 	}{{end}}
 	{{.NOCGOPost}}
-}
-{{end}}
+}{{end}}
 {{if .Bench}}
 func {{.BenchmarkName}}(b *testing.B) {
 	{{.NOCGOPre}}
-	arg := &{{.Name}}Spec{ {{.DataInit}} }
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		{{.Name}}Func.Call(unsafe.Pointer(arg))
+		{{.Name}}Func({{.DataInit}})
 	}
 }
-{{end}}
-{{end}}
+{{end}}{{end}}
 
 func TestMain(m *testing.M) {
 	var lib string
@@ -285,8 +274,7 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	{{range .}}{{.Name}}Func, err = l.Func("{{.Name}}", {{.Name}}Spec{})
-	if err != nil {
+	{{range .}}if err := l.Func("{{.Name}}", &{{.Name}}Func); err != nil {
 		log.Fatal(err)
 	}
 
@@ -470,8 +458,8 @@ func main() {
 		t.Fatalf("Expected \"test from C: -1 1.5 gotest\n\", but got \"%s\"", string(buf[:ret]))
 	}`,
 			NOCGOPre: "buf := make([]byte, 1024)",
-			NOCGOPost: `	if string(buf[:arg.ret]) != "test from C: -1 1.5 gotest\n" {
-		t.Fatalf("Expected \"test from C: -1 1.5 gotest\n\", but got \"%s\"", string(buf[:arg.ret]))
+			NOCGOPost: `	if string(buf[:ret]) != "test from C: -1 1.5 gotest\n" {
+		t.Fatalf("Expected \"test from C: -1 1.5 gotest\n\", but got \"%s\"", string(buf[:ret]))
 	}`,
 			Multitest: true,
 		},

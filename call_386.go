@@ -1,9 +1,7 @@
 package nocgo
 
 import (
-	"fmt"
-	"reflect"
-	"strings"
+	"unsafe"
 )
 
 // 386 cdecl calling conventions: http://www.sco.com/developers/devspecs/abi386-4.pdf
@@ -15,14 +13,12 @@ import (
 type argtype uint16
 
 const (
-	type32     argtype = 0 // movl              64 bit
-	typeS16    argtype = 1 // movwlsx    signed 16 bit
-	typeU16    argtype = 2 // movwlzx  unsigned 16 bit
-	typeS8     argtype = 3 // movblsx    signed 8  bit
-	typeU8     argtype = 4 // movblzx  unsigned 8  bit
-	typeDouble argtype = 5 // fld             64 bit
-	typeFloat  argtype = 6 // movss             32 bit
-	type64     argtype = 7
+	type32     argtype = 0 // movl    64 bit
+	type16     argtype = 1 // movw    16 bit
+	type8      argtype = 2 // movb    8  bit
+	typeDouble argtype = 3 // fld     64 bit (only return)
+	typeFloat  argtype = 4 // movss   32 bit (only return)
+	type64     argtype = 5 // 2x movl        (only return)
 	typeUnused argtype = 0xFFFF
 )
 
@@ -31,92 +27,72 @@ type argument struct {
 	t      argtype
 }
 
-// Spec is the callspec needed to do the actuall call
-type Spec struct {
-	fn    uintptr
-	base  uintptr
-	stack []argument
-	ret   argument
+// spec a wrapper specifcation with instructions on how to place arguments into registers/stack
+type spec struct {
+	wrapper uintptr // pointer to callWrapper()
+	fn      uintptr // pointer to the C-function
+	stack   []argument
+	ret     argument
 }
 
+func callWrapper()
+
 // makeSpec builds a call specification for the given arguments
-func makeSpec(fn uintptr, args interface{}) (Spec, error) {
-	v := reflect.ValueOf(args)
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
+func makeSpec(fn uintptr, fun interface{}) error {
+	fptr, arguments, ret, err := stackFields(fun)
+	if err != nil {
+		return err
 	}
-	t := v.Type()
 
-	var spec Spec
-
+	spec := new(spec)
+	spec.wrapper = funcPC(callWrapper)
 	spec.fn = fn
-
 	spec.ret.t = typeUnused
 
-	haveRet := false
-
-ARGS:
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		tags := strings.Split(f.Tag.Get("nocgo"), ",")
-		ret := false
-		for _, tag := range tags {
-			if tag == "ignore" {
-				continue ARGS
-			}
-			if tag == "ret" {
-				if haveRet == true {
-					panic("Only one return argument allowed")
-				}
-				ret = true
-				haveRet = true
-				continue
-			}
-		}
-		if ret {
-			switch f.Type.Kind() {
-			case reflect.Slice:
-				spec.ret = argument{uint16(f.Offset + sliceOffset), type32}
-			case reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr, reflect.UnsafePointer:
-				spec.ret = argument{uint16(f.Offset), type32}
-			case reflect.Int16:
-				spec.ret = argument{uint16(f.Offset), typeS16}
-			case reflect.Uint16:
-				spec.ret = argument{uint16(f.Offset), typeU16}
-			case reflect.Int8:
-				spec.ret = argument{uint16(f.Offset), typeS8}
-			case reflect.Uint8, reflect.Bool:
-				spec.ret = argument{uint16(f.Offset), typeU8}
-			case reflect.Float32:
-				spec.ret = argument{uint16(f.Offset), typeFloat}
-			case reflect.Float64:
-				spec.ret = argument{uint16(f.Offset), typeDouble}
-			case reflect.Uint64, reflect.Int64:
-				spec.ret = argument{uint16(f.Offset), type64}
-			default:
-				return Spec{}, fmt.Errorf("Type %s of element %s not supported", f.Type.Kind(), f.Name)
-			}
-			continue
-		}
-		switch f.Type.Kind() {
-		case reflect.Slice:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset + sliceOffset), type32})
-		case reflect.Uint64, reflect.Int64, reflect.Float64:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset), type32})
-			spec.stack = append(spec.stack, argument{uint16(f.Offset + 4), type32})
-		case reflect.Int32, reflect.Uint32, reflect.Ptr, reflect.Uintptr, reflect.Float32:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset), type32})
-		case reflect.Int16:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeS16})
-		case reflect.Uint16:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeU16})
-		case reflect.Int8:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeS8})
-		case reflect.Uint8, reflect.Bool:
-			spec.stack = append(spec.stack, argument{uint16(f.Offset), typeU8})
-		default:
-			return Spec{}, fmt.Errorf("Type %s of element %s not supported", f.Type.Kind(), f.Name)
+	// on 386 we can't directly pass the arguments to the function :(
+	// -> go aligns arguments like a struct and 386 aligns every argument to 4 byte boundaries
+	for _, arg := range arguments {
+		switch arg.size {
+		case 8:
+			spec.stack = append(spec.stack, argument{uint16(arg.offset), type32})
+			spec.stack = append(spec.stack, argument{uint16(arg.offset + 4), type32})
+		case 4:
+			spec.stack = append(spec.stack, argument{uint16(arg.offset), type32})
+		case 2:
+			spec.stack = append(spec.stack, argument{uint16(arg.offset), type16})
+		case 1:
+			spec.stack = append(spec.stack, argument{uint16(arg.offset), type8})
 		}
 	}
-	return spec, nil
+
+	if ret.c != classVoid {
+		var t argtype
+		switch ret.c {
+		case classInt, classUint:
+			switch ret.size {
+			case 8:
+				t = type64
+			case 4:
+				t = type32
+			case 2:
+				t = type16
+			case 1:
+				t = type8
+			}
+		case classFloat:
+			switch ret.size {
+			case 8:
+				t = typeDouble
+			case 4:
+				t = typeFloat
+			}
+		}
+
+		spec.ret.t = t
+		spec.ret.offset = uint16(ret.offset)
+	}
+
+	*(*unsafe.Pointer)(fptr) = unsafe.Pointer(spec)
+
+	return nil
 }

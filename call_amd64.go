@@ -1,9 +1,7 @@
 package nocgo
 
 import (
-	"fmt"
-	"reflect"
-	"strings"
+	"unsafe"
 )
 
 // amd64 cdecl calling conventions: https://www.uclibc.org/docs/psABI-x86_64.pdf
@@ -13,7 +11,7 @@ import (
 //   - Pass rest on the stack
 //   - Pass number of used float registers in AX
 // Return is in AX or X0 for floats
-// according to libffi clang might require the caller to properly (sign)extend stuff - so we do that
+// according to libffi clang might require the caller to properly (sign)extend stuff in registers - so we do that
 // structs are not supported for now (neither as argument nor as return value) - but this is not hard to do
 
 type argtype uint16
@@ -36,10 +34,10 @@ type argument struct {
 	t      argtype
 }
 
-// Spec is the callspec needed to do the actuall call
-type Spec struct {
-	fn      uintptr
-	base    uintptr
+// spec a wrapper specifcation with instructions on how to place arguments into registers/stack
+type spec struct {
+	wrapper uintptr // pointer to callWrapper()
+	fn      uintptr // pointer to the C-function
 	stack   []argument
 	intargs [6]argument
 	xmmargs [8]argument
@@ -47,106 +45,122 @@ type Spec struct {
 	rax     uint8
 }
 
-func fieldToOffset(k reflect.StructField) (argument, bool, error) {
-	switch k.Type.Kind() {
-	case reflect.Slice:
-		return argument{uint16(k.Offset + sliceOffset), type64}, false, nil
-	case reflect.Uint64, reflect.Int64, reflect.Ptr, reflect.Uintptr, reflect.UnsafePointer:
-		return argument{uint16(k.Offset), type64}, false, nil
-	case reflect.Int32:
-		return argument{uint16(k.Offset), typeS32}, false, nil
-	case reflect.Uint32:
-		return argument{uint16(k.Offset), typeU32}, false, nil
-	case reflect.Int16:
-		return argument{uint16(k.Offset), typeS16}, false, nil
-	case reflect.Uint16:
-		return argument{uint16(k.Offset), typeU16}, false, nil
-	case reflect.Int8:
-		return argument{uint16(k.Offset), typeS8}, false, nil
-	case reflect.Uint8, reflect.Bool:
-		return argument{uint16(k.Offset), typeU8}, false, nil
-	case reflect.Float32:
-		return argument{uint16(k.Offset), typeFloat}, true, nil
-	case reflect.Float64:
-		return argument{uint16(k.Offset), typeDouble}, true, nil
-	}
-	return argument{}, false, fmt.Errorf("Type %s of element %s not supported", k.Type.Kind(), k.Name)
-}
-
 // FIXME: we don't support stuff > 64 bit
 
+func callWrapper()
+
 // makeSpec builds a call specification for the given arguments
-func makeSpec(fn uintptr, args interface{}) (Spec, error) {
-	v := reflect.ValueOf(args)
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
+func makeSpec(fn uintptr, fun interface{}) error {
+	fptr, arguments, ret, err := stackFields(fun)
+	if err != nil {
+		return err
 	}
-	t := v.Type()
 
-	var spec Spec
-
+	spec := new(spec)
+	spec.wrapper = funcPC(callWrapper)
 	spec.fn = fn
-
 	spec.ret.t = typeUnused
-
-	haveRet := false
 
 	intreg := 0
 	xmmreg := 0
 
-ARGS:
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		tags := strings.Split(f.Tag.Get("nocgo"), ",")
-		ret := false
-		for _, tag := range tags {
-			if tag == "ignore" {
-				continue ARGS
-			}
-			if tag == "ret" {
-				if haveRet == true {
-					panic("Only one return argument allowed")
+	for _, arg := range arguments {
+		var t argtype
+		switch arg.c {
+		case classInt, classUint:
+			switch {
+			case arg.size == 8:
+				t = type64
+			case arg.size == 4:
+				if arg.c == classInt {
+					t = typeS32
+				} else {
+					t = typeU32
 				}
-				ret = true
-				haveRet = true
-				continue
+			case arg.size == 2:
+				if arg.c == classInt {
+					t = typeS16
+				} else {
+					t = typeU16
+				}
+			case arg.size == 1:
+				if arg.c == classInt {
+					t = typeS8
+				} else {
+					t = typeU8
+				}
 			}
-		}
-		if ret {
-			off, _, err := fieldToOffset(f)
-			if err != nil {
-				return Spec{}, err
-			}
-			spec.ret = off
-			// FIXME ret1/xmmret1! - only needed for types > 64 bit
-			continue
-		}
-		off, xmm, err := fieldToOffset(f)
-		if err != nil {
-			return Spec{}, err
-		}
-		if xmm {
-			if xmmreg < 8 {
-				spec.xmmargs[xmmreg] = off
-				xmmreg++
-			} else {
-				spec.stack = append(spec.stack, off)
-			}
-		} else {
 			if intreg < 6 {
-				spec.intargs[intreg] = off
+				spec.intargs[intreg] = argument{uint16(arg.offset), t}
 				intreg++
 			} else {
-				spec.stack = append(spec.stack, off)
+				switch t {
+				case typeS32:
+					t = typeU32
+				case typeS16:
+					t = typeU16
+				case typeS8:
+					t = typeU8
+				}
+				spec.stack = append(spec.stack, argument{uint16(arg.offset), t})
+			}
+		case classFloat:
+			switch {
+			case arg.size == 8:
+				t = typeDouble
+			case arg.size == 4:
+				t = typeFloat
+			}
+			if xmmreg < 8 {
+				spec.xmmargs[xmmreg] = argument{uint16(arg.offset), t}
+				xmmreg++
+			} else {
+				switch t {
+				case typeDouble:
+					t = type64
+				case typeFloat:
+					t = typeU32
+				}
+				spec.stack = append(spec.stack, argument{uint16(arg.offset), t})
 			}
 		}
 	}
+
+	spec.rax = uint8(xmmreg)
 	for i := intreg; i < 6; i++ {
 		spec.intargs[i].t = typeUnused
 	}
 	for i := xmmreg; i < 8; i++ {
 		spec.xmmargs[i].t = typeUnused
 	}
-	spec.rax = uint8(xmmreg)
-	return spec, nil
+
+	if ret.c != classVoid {
+		var t argtype
+		switch ret.c {
+		case classInt, classUint:
+			switch ret.size {
+			case 8:
+				t = type64
+			case 4:
+				t = typeU32
+			case 2:
+				t = typeU16
+			case 1:
+				t = typeU8
+			}
+		case classFloat:
+			switch ret.size {
+			case 8:
+				t = typeDouble
+			case 4:
+				t = typeFloat
+			}
+		}
+		spec.ret.t = t
+		spec.ret.offset = uint16(ret.offset)
+	}
+
+	*(*unsafe.Pointer)(fptr) = unsafe.Pointer(spec)
+
+	return nil
 }

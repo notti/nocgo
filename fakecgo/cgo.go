@@ -33,6 +33,8 @@ var setg_func uintptr
 // x_cgo_init(G *g, void (*setg)(void*)) (runtime/cgo/gcc_linux_amd64.c)
 // This get's called during startup, adjusts stacklo, and provides a pointer to setg_gcc for us
 // Additionally, if we set _cgo_init to non-null, go won't do it's own TLS setup
+// This function can't be go:systemstack since go is not in a state where the systemcheck would work.
+//
 //go:nosplit
 func x_cgo_init(g *g, setg uintptr) {
 	var size size_t
@@ -55,6 +57,7 @@ func x_cgo_init(g *g, setg uintptr) {
 // This get's called instead of the go code for creating new threads
 // -> pthread_* stuff is used, so threads are setup correctly for C
 // If this is missing, TLS is only setup correctly on thread 1!
+// This function should be go:systemstack instead of go:nosplit (but that requires runtime)
 //
 //go:nosplit
 func x_cgo_thread_start(arg *threadstart) {

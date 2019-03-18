@@ -9,7 +9,7 @@
 
 
 #define LOADREG(off, target) \
-    MOVLQSX Spec_intargs+argument__size*off(R12), AX \
+    MOVLQSX spec_intargs+argument__size*off(R12), AX \
     TESTQ AX, AX \
     JS xmm \
     MOVWQZX AX, R11 \
@@ -42,7 +42,7 @@
     MOVBQZX 0(R11), target // unsigned 8 bit
 
 #define LOADXMMREG(off, target) \
-    MOVLQSX Spec_xmmargs+argument__size*off(R12), AX \
+    MOVLQSX spec_xmmargs+argument__size*off(R12), AX \
     TESTQ AX, AX \
     JS prepared \
     MOVWQZX AX, R11 \
@@ -54,18 +54,31 @@
     JMP 2(PC) \
     MOVSS 0(R11), target \ // float 32bit
 
+TEXT ·cgocall(SB),NOSPLIT,$0
+    JMP runtime·cgocall(SB)
 
-// func asmcall(spec)
-TEXT ·asmcall(SB),NOSPLIT,$0
-    MOVQ DI, R12      // FRAME (preserved)
-    MOVQ Spec_base(R12), R13  // base
-    MOVQ SP, R14 // stack
+// pass struct { &args, &spec } to cgocall
+TEXT ·callWrapper(SB),NOSPLIT|WRAPPER,$32
+    MOVQ DX, 24(SP)
+    LEAQ argframe+0(FP), AX
+    MOVQ AX, 16(SP)
+    LEAQ 16(SP), AX
+    MOVQ AX, 8(SP)
+    LEAQ asmcall(SB), AX
+    MOVQ AX, 0(SP)
+    CALL ·cgocall(SB)
+    RET
+
+TEXT asmcall(SB),NOSPLIT,$0
+    MOVQ 8(DI), R12      // spec (preserved)
+    MOVQ 0(DI), R13      // base of args (preserved)
+    MOVQ SP, R14         // stack for restoring later on (preserved)
 
     ANDQ $~0x1F, SP // 32 byte alignment for cdecl (in case someone wants to pass __m256 on the stack)
     // for no __m256 16 byte would be ok
     // this is actually already done by cgocall - but asmcall was called from there and destroys that :(
 
-    MOVQ Spec_stack+slice_len(R12), AX // length of stack registers
+    MOVQ spec_stack+slice_len(R12), AX // length of stack registers
     TESTQ AX, AX
     JZ reg
 
@@ -77,7 +90,7 @@ TEXT ·asmcall(SB),NOSPLIT,$0
     SHLQ $3, BX
     SUBQ BX, SP
 
-    MOVQ Spec_stack+slice_array(R12), BX
+    MOVQ spec_stack+slice_array(R12), BX
 
 next:
     DECQ AX
@@ -87,29 +100,20 @@ next:
     SHRL $16, CX
     ADDQ R13, R11
 
-#define LOADSTACK(type, instr, tmp) \
+#define LOADSTACK(type, instr) \
     CMPB CX, type \
     JNE 7(PC) \
     SUBQ $8, SP \
-    instr 0(R11), tmp \
-    MOVQ tmp, 0(SP) \
+    instr 0(R11), CX \
+    instr CX, 0(SP) \
     TESTQ AX, AX \
     JZ reg \
     JMP next
 
-#define LOADSTACKINT(type, instr) LOADSTACK(type, instr, CX)
-#define LOADSTACKXMM(type, instr) LOADSTACK(type, instr, X0)
-
-    LOADSTACKINT($const_type64, MOVQ)
-    LOADSTACKINT($const_typeS32, MOVLQSX)
-    LOADSTACKINT($const_typeU32, MOVLQZX)
-    LOADSTACKINT($const_typeS16, MOVWQSX)
-    LOADSTACKINT($const_typeU16, MOVWQZX)
-    LOADSTACKINT($const_typeS8, MOVBQSX)
-    LOADSTACKINT($const_typeU8, MOVBQZX)
-
-    LOADSTACKXMM($const_typeDouble, MOVSD)
-    LOADSTACKXMM($const_typeFloat, MOVSS)
+    LOADSTACK($const_type64, MOVQ)
+    LOADSTACK($const_typeU32, MOVL)
+    LOADSTACK($const_typeU16, MOVW)
+    LOADSTACK($const_typeU8, MOVB)
 
     INT $3
 
@@ -135,38 +139,40 @@ xmm:
 
 prepared:
     // load number of vector registers
-    MOVBQZX Spec_rax(R12), AX
+    MOVBQSX spec_rax(R12), AX
 
     // do the actuall call
-    CALL (R12)
+    CALL spec_fn(R12)
 
     MOVQ R14, SP
 
+    // TODO: check R13, if it still points to the correct stack! (could happen if we have a callback into go that splits the stack)
+
     // store ret
-    MOVLQSX Spec_ret(R12), BX
+    MOVLQSX spec_ret(R12), BX
     TESTQ BX, BX
     JS DONE
     MOVWQZX BX, R11
     SHRL $16, BX
     ADDQ R13, R11
 
-    CMPB BX, $0
+    CMPB BX, $const_type64
     JNE 3(PC)
     MOVQ AX, (R11)
     JMP DONE
 
-    CMPB BX, $2
-    JGT 3(PC)
+    CMPB BX, $const_typeU32
+    JNE 3(PC)
     MOVL AX, (R11)
     JMP DONE
 
-    CMPB BX, $4
-    JGT 3(PC)
+    CMPB BX, $const_typeU16
+    JNE 3(PC)
     MOVW AX, (R11)
     JMP DONE
 
-    CMPB BX, $6
-    JGT 3(PC)
+    CMPB BX, $const_typeU8
+    JNE 3(PC)
     MOVB AX, (R11)
     JMP DONE
 

@@ -37,8 +37,8 @@ Helperfunctions for converting between C strings and go strings are provided (se
 
 Argument Specifications
 
-Arguments to functions must be specified via a struct. If the return value of the function is needed, a field with the tag `nocgo:"ret"` can be added.
-This field can appear anywhere in the struct (doesn't need to be at the end). Only one return field can be provided.
+Arguments to functions must be specified via a pointer to func variable. A call to lib.Func will examine arguments and
+eventual return value (only one or no return values allowed!), and set the function variable to a wrapper that will call into the desired C-function.
 
 Example for pcap_open_live (libpcap):
 
@@ -46,14 +46,7 @@ C declaration:
 	pcap_t *pcap_open_live(const char *device, int snaplen, int promisc, int to_ms, char *errbuf);
 
 nocgo declaration:
-	type pcapOpenLiveArgs struct {
-		device  []byte
-		snaplen int32
-		promisc int32
-		toMS    int32
-		errbuf  []byte
-		ret     uintptr `nocgo:"ret"`
-	}
+	var pcapOpenLive func(device []byte, snaplen int32, promisc int32, toMS int32, errbuf []byte) uintptr
 
 ret uses uintptr as type since pcap_t* is just passed to every other libpcap function and we don't care or need to know whats actually in there or where it's pointing to.
 */

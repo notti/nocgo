@@ -13,12 +13,20 @@ This could cause lots of issues from random crashes (there are tests - but there
 
 > **WARNING** nocgo supports both cgo and missing cgo as environment. So if you want to ensure cgo not being used don't forget `CGO_ENABLED=0` as environment variable to `go build`.
 
+Todo
+----
+
+- Callbacks into go
+- Structures
+
+When that's done write up a proposal for golang inclusion.
+
 Usage
 -----
 
 Libraries can be loaded and unloaded similar to `dlopen` and `dlclose`, but acquiring symbols (i.e., functions, global variables) is a bit different, since a function specification (i.e., arguments, types, return type) is also needed. Furthermore, C-types must be translated to go-types and vice versa.
 
-This works by providing a function specification as a `struct`, where all the elements are the function arguments (in the same order) and one element can be marked as return (with the tag `nocgo:"ret"`). Before function call, the argument values must be provided with this `struct` and after the function call, the return value will be in the return element. The function call might also change argument values, if those are provided via pointers.
+This works by providing a function specification as a pointer to a function variable. A call to `lib.Func` will examine arguments and eventual return value (only one or no return values allowed!), and set the function variable to a wrapper that will call into the desired C-function.
 
 ### Type Mappings
 
@@ -52,43 +60,30 @@ An example using `pcap_open_live` from libpcap (C-definition: `pcap_t *pcap_open
 `) could look like the following example:
 
 ```golang
-// Argument specification
-type pcapOpenLiveArgs struct {
-    device  []byte
-    snaplen int32
-    promisc int32
-    toMS    int32
-    errbuf  []byte
-    ret     uintptr `nocgo:"ret"`
-}
-// Provide some values
-openLiveArg := pcapOpenLiveArgs{
-    device:  nocgo.MakeCString("lo"),
-    snaplen: 1500,
-    promisc: 1,
-    toMS:    100,
-    errbuf:  make([]byte, 512),
-}
+
 // Load the library
 lib, err := nocgo.Open("libpcap.so")
 if err != nil {
     log.Fatalln("Couldn't load libpcap: ", err)
 }
+
+// func specification
+var pcapOpenLive func(device []byte, snaplen int32, promisc int32, toMS int32, errbuf []byte) uintptr
 // Get a handle for the function
-pcapOpenLive, err := lib.Func("pcap_open_live", openLiveArg) // here we could also provide pcapOpenLiveArgs{}
-if err != nil {
+if err := lib.Func("pcap_open_live", &pcapOpenLive); err != nil {
     log.Fatalln("Couldn't get pcap_open_live: ", err)
 }
 
 // Do the function call
-pcapOpenLive.Call(unsafe.Pointer(&openLiveArg))
+errbuf := make([]byte, 512)
+pcapHandle := pcapOpenLive(nocgo.MakeCString("lo"), 1500, 1, 100, errbuf)
 
 // Check return value
-if openLiveArg.ret == 0 {
-    log.Fatalf("Couldn't open %s: %s\n", *dev, nocgo.MakeGoStringFromSlice(openLiveArg.errbuf))
+if pcapHandle == 0 {
+    log.Fatalf("Couldn't open %s: %s\n", "lo", nocgo.MakeGoStringFromSlice(errbuf))
 }
 
-// openLiveArg.ret can now be used as argument to the other libpcap functions
+// pcapHandle can now be used as argument to the other libpcap functions
 ```
 
 A full example is contained in [examplelibpcap](examplelibpcap) and another one in [example](example).
@@ -119,7 +114,7 @@ How does this work
 
 ### nocgo
 
-nocgo imports `dlopen`, `dlclose`, `dlerror`, `dlsym` via `go:cgo_import_dynamic` in [dlopen_OS.go](dlopen_linux.go). `lib.Func` builds a specification on where to put which argument in [call_arch.go](call_amd64.go). `spec.Call` uses `cgocall` from the runtime to call an assembly function and pass the spec to it. This assembly function is implemented in call_arch.s and it uses the specification to place the arguments into the right places, calls the pointer provided by `dlsym` and then puts the return argument into the right place if needed.
+nocgo imports `dlopen`, `dlclose`, `dlerror`, `dlsym` via `go:cgo_import_dynamic` in [dlopen_OS.go](dlopen_linux.go). `lib.Func` builds a specification on where to put which argument in [call_arch.go](call_amd64.go). go calls such a function by dereferencing, where it points to, provide this address in a register and call the first address that is stored there. nocgo uses this mechanism by putting a struct there, that contains the address to a wrapper followed by a pointer to the what `dlsym` provided and a calling specification. The provided wrapper uses `cgocall` from the runtime to call an assembly function and pass the spec and a pointer to the arguments to it. This assembly function is implemented in call_arch.s and it uses the specification to place the arguments into the right places, calls the pointer provided by `dlsym` and then puts the return argument into the right place if needed.
 
 This is basically what `libffi` does. So far cdecl for 386 (pass arguments on the stack in right to left order, return values are in AX/CX or ST0) and amd64 (pass arguments in registers DI, SI, DX, CX, R8, R9/X0-X7 and the stack in right to left order, number of floats in AX, fixup alignment of stack) are implemented.
 
@@ -172,9 +167,9 @@ This will be a bit slower than cgo. Most of this is caused by argument rearrangi
 
 ```
 name           old time/op    new time/op    delta
-Empty-4          89.8ns ±12%    85.6ns ± 5%      ~     (p=0.481 n=10+10)
-Float2-4         84.6ns ± 1%   215.8ns ± 2%  +154.91%  (p=0.000 n=8+9)
-StackSpill3-4     118ns ± 5%     126ns ± 5%    +7.07%  (p=0.000 n=10+8)
+Empty-4          84.5ns ± 0%    86.4ns ± 2%    +2.22%  (p=0.000 n=8+8)
+Float2-4         87.9ns ± 1%   222.5ns ± 6%  +153.20%  (p=0.000 n=8+10)
+StackSpill3-4     116ns ± 1%     130ns ± 1%   +12.04%  (p=0.000 n=8+8)
 ```
 
 Float is so slow since that type is at the end of the comparison chain.
@@ -183,7 +178,7 @@ Float is so slow since that type is at the end of the comparison chain.
 
 ```
 name           old time/op    new time/op    delta
-Empty-4          70.1ns ± 8%    73.9ns ± 3%   +5.36%  (p=0.026 n=10+9)
-Float2-4         72.0ns ± 4%    90.9ns ± 4%  +26.20%  (p=0.000 n=10+10)
-StackSpill3-4    88.5ns ± 4%   117.2ns ± 1%  +32.52%  (p=0.000 n=10+8)
+Empty-4          76.8ns ±10%    80.1ns ± 9%   +4.24%  (p=0.041 n=10+10)
+Float2-4         78.4ns ± 5%    81.4ns ± 9%   +3.80%  (p=0.033 n=9+10)
+StackSpill3-4    96.2ns ± 5%   120.7ns ± 7%  +25.46%  (p=0.000 n=10+9)
 ```
