@@ -3,18 +3,31 @@
 //line main.go:1:1
 package main
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int test_cb();
+*/
 import _ "unsafe"
 
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
+
+//export cb
+func cb(x int) int {
+	fmt.Println("in go", x)
+	return x * 2
+}
 
 func main() {
 	cs := []byte("Hello\000 world\000")
-	(_Cfunc_puts)((*_Ctype_char)(unsafe.Pointer(&cs[0])))
-	func(_cgo0 *_Ctype_char, _cgo1 *_Ctype_struct__IO_FILE) _Ctype_int {;	_cgoCheckPointer(_cgo1);	return (_Cfunc_fputs)(_cgo0, _cgo1);}((*_Ctype_char)(unsafe.Pointer(&cs[0])), (_Cmacro_stdout()))
-	func(_cgo0 _Ctype_int, _cgo1 *_Ctype_struct__IO_FILE) _Ctype_int {;	_cgoCheckPointer(_cgo1);	return (_Cfunc_putc)(_cgo0, _cgo1);}('a', (_Cmacro_stdout()))
-	(_Cfunc_strcat)((*_Ctype_char)(unsafe.Pointer(&cs[0])), (*_Ctype_char)(unsafe.Pointer(&cs[0])))
-	(_Cfunc_puts)((*_Ctype_char)(unsafe.Pointer(&cs[0])))
+	( /*line :24:2*/_Cfunc_puts /*line :24:7*/)((* /*line :24:11*/_Ctype_char /*line :24:17*/)(unsafe.Pointer(&cs[0])))
+	func() _Ctype_int{ var _cgo0 *_Ctype_char = /*line :25:10*/(*_Ctype_char)(unsafe.Pointer(&cs[0])); _cgo1 := /*line :25:45*/_Cmacro_stdout(); _cgoCheckPointer(_cgo1); return _Cfunc_fputs(_cgo0, _cgo1); }()
+	func() _Ctype_int{ var _cgo0 _Ctype_int = /*line :26:9*/'a'; _cgo1 := /*line :26:14*/_Cmacro_stdout(); _cgoCheckPointer(_cgo1); return _Cfunc_putc(_cgo0, _cgo1); }()
+	( /*line :27:2*/_Cfunc_strcat /*line :27:9*/)((* /*line :27:13*/_Ctype_char /*line :27:19*/)(unsafe.Pointer(&cs[0])), (* /*line :27:48*/_Ctype_char /*line :27:54*/)(unsafe.Pointer(&cs[0])))
+	( /*line :28:2*/_Cfunc_puts /*line :28:7*/)((* /*line :28:11*/_Ctype_char /*line :28:17*/)(unsafe.Pointer(&cs[0])))
+	fmt.Println(( /*line :29:14*/_Cfunc_test_cb /*line :29:22*/)())
 }

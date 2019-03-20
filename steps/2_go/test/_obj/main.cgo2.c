@@ -5,6 +5,7 @@
 /* Define intgo when compiling with GCC.  */
 typedef ptrdiff_t intgo;
 
+#define GO_CGO_GOSTRING_TYPEDEF
 typedef struct { const char *p; intgo n; } _GoString_;
 typedef struct { char *p; intgo n; intgo c; } _GoBytes_;
 _GoString_ GoString(char *p);
@@ -15,15 +16,17 @@ void *CBytes(_GoBytes_);
 void *_CMalloc(size_t);
 
 __attribute__ ((unused))
-static size_t _GoStringLen(_GoString_ s) { return s.n; }
+static size_t _GoStringLen(_GoString_ s) { return (size_t)s.n; }
 
 __attribute__ ((unused))
 static const char *_GoStringPtr(_GoString_ s) { return s.p; }
 
-#line 3 "/home/notti/go/src/github.com/notti/go-dynamic/steps/2_go/test/main.go"
- #include <stdio.h>
- #include <stdlib.h>
- #include <string.h>
+#line 3 "/home/notti/go/src/github.com/notti/nocgo/steps/2_go/test/main.go"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int test_cb();
 
 #line 1 "cgo-generated-wrapper"
 
@@ -49,6 +52,14 @@ __cgo_size_assert(double, 8)
 
 extern char* _cgo_topofstack(void);
 
+/* We use packed structs, but they are always aligned.  */
+/* The pragmas and address-of-packed-member are not recognized as warning groups in clang 3.4.1, so ignore unknown pragmas first. */
+/* remove as part of #27619 (all: drop support for FreeBSD 10). */
+
+#pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+
 #include <errno.h>
 #include <string.h>
 
@@ -62,7 +73,7 @@ extern char* _cgo_topofstack(void);
 
 CGO_NO_SANITIZE_THREAD
 void
-_cgo_194c66e4342c_Cfunc_fputs(void *v)
+_cgo_4b63218df55f_Cfunc_fputs(void *v)
 {
 	struct {
 		char const* p0;
@@ -82,7 +93,7 @@ _cgo_194c66e4342c_Cfunc_fputs(void *v)
 
 CGO_NO_SANITIZE_THREAD
 void
-_cgo_194c66e4342c_Cfunc_putc(void *v)
+_cgo_4b63218df55f_Cfunc_putc(void *v)
 {
 	struct {
 		int p0;
@@ -103,7 +114,7 @@ _cgo_194c66e4342c_Cfunc_putc(void *v)
 
 CGO_NO_SANITIZE_THREAD
 void
-_cgo_194c66e4342c_Cfunc_puts(void *v)
+_cgo_4b63218df55f_Cfunc_puts(void *v)
 {
 	struct {
 		char const* p0;
@@ -122,7 +133,7 @@ _cgo_194c66e4342c_Cfunc_puts(void *v)
 
 CGO_NO_SANITIZE_THREAD
 void
-_cgo_194c66e4342c_Cmacro_stdout(void *v)
+_cgo_4b63218df55f_Cmacro_stdout(void *v)
 {
 	struct {
 		FILE* r;
@@ -139,7 +150,7 @@ _cgo_194c66e4342c_Cmacro_stdout(void *v)
 
 CGO_NO_SANITIZE_THREAD
 void
-_cgo_194c66e4342c_Cfunc_strcat(void *v)
+_cgo_4b63218df55f_Cfunc_strcat(void *v)
 {
 	struct {
 		char* p0;
@@ -150,6 +161,24 @@ _cgo_194c66e4342c_Cfunc_strcat(void *v)
 	__typeof__(_cgo_a->r) _cgo_r;
 	_cgo_tsan_acquire();
 	_cgo_r = (__typeof__(_cgo_a->r)) strcat(_cgo_a->p0, _cgo_a->p1);
+	_cgo_tsan_release();
+	_cgo_a = (void*)((char*)_cgo_a + (_cgo_topofstack() - _cgo_stktop));
+	_cgo_a->r = _cgo_r;
+	_cgo_msan_write(&_cgo_a->r, sizeof(_cgo_a->r));
+}
+
+CGO_NO_SANITIZE_THREAD
+void
+_cgo_4b63218df55f_Cfunc_test_cb(void *v)
+{
+	struct {
+		int r;
+		char __pad4[4];
+	} __attribute__((__packed__, __gcc_struct__)) *_cgo_a = v;
+	char *_cgo_stktop = _cgo_topofstack();
+	__typeof__(_cgo_a->r) _cgo_r;
+	_cgo_tsan_acquire();
+	_cgo_r = test_cb();
 	_cgo_tsan_release();
 	_cgo_a = (void*)((char*)_cgo_a + (_cgo_topofstack() - _cgo_stktop));
 	_cgo_a->r = _cgo_r;
