@@ -1,5 +1,6 @@
 #include "textflag.h"
 #include "go_asm.h"
+#include "funcdata.h"
 
 // runtime has #include "go_asm.h"
 // we need to fake the defines here:
@@ -18,28 +19,38 @@
     CMPB AX, $const_type64 \
     JNE 3(PC) \
     MOVQ 0(R11), target \ // 64bit
-    JMP 20(PC) \
+    JMP 30(PC) \
     CMPB AX, $const_typeS32 \
     JNE 3(PC) \
     MOVLQSX 0(R11), target \ // signed 32 bit
-    JMP 18(PC) \
+    JMP 26(PC) \
     CMPB AX, $const_typeU32 \
     JNE 3(PC) \
     MOVLQZX 0(R11), target \ // unsigned 32 bit
-    JMP 14(PC) \
+    JMP 23(PC) \
     CMPB AX, $const_typeS16 \
     JNE 3(PC) \
     MOVWQSX 0(R11), target \ // signed 16 bit
-    JMP 10(PC) \
+    JMP 20(PC) \
     CMPB AX, $const_typeU16 \
     JNE 3(PC) \
     MOVWQZX 0(R11), target \ // unsigned 16 bit
-    JMP 6(PC) \
+    JMP 16(PC) \
     CMPB AX, $const_typeS8 \
     JNE 3(PC) \
     MOVBQSX 0(R11), target \ // signed 8 bit
+    JMP 12(PC) \
+    CMPB AX, $const_typeU8 \
+    JNE 3(PC) \
+    MOVBQZX 0(R11), target \ // unsigned 8 bit
+    JMP 8(PC) \
+    CMPB AX, $const_typeCallback \ // callback
+    JNE 5(PC) \
+    SUBQ R13, R11 \
+    MOVQ $callbacks<>(SB), AX \
+    MOVQ (AX)(R11*8), target \
     JMP 2(PC) \
-    MOVBQZX 0(R11), target // unsigned 8 bit
+    INT $3
 
 #define LOADXMMREG(off, target) \
     MOVLQSX spec_xmmargs+argument__size*off(R12), AX \
@@ -57,8 +68,103 @@
 TEXT ·cgocall(SB),NOSPLIT,$0
     JMP runtime·cgocall(SB)
 
+//func cgocallback(fn, frame unsafe.Pointer, framesize, ctxt uintptr)
+TEXT cgocallback(SB),NOSPLIT,$0
+    JMP runtime·cgocallback(SB)
+
+// 18*8
+// 0x0: fn
+// 0x8: frame
+// 0x10: framesize
+// 0x18: ctx
+// 0x20: bp <- callbackArgs
+// 0x28: DI
+// 0x30: SI
+// 0x38: DX <- ret
+// 0x40: CX
+// 0x48: R8
+// 0x50: R9
+// 0x58: X0 <- ret
+// 0x60: X1
+// 0x68: X2
+// 0x70: X3
+// 0x78: X4
+// 0x80: X5
+// 0x88: X6
+// 0x90: X7
+// 0x98: AX <- ret
+// 0xA0: which
+// 0xA8: BX <- safe
+// 0xB0: R12
+// 0xB8: R13
+// 0xC0: R14
+// 0xC8: R15
+
+// need to save BP?
+#define CALLBACK(name, id) \
+TEXT name(SB),NOSPLIT,$0xD8 \
+    MOVQ DI, 0x28(SP) \
+    MOVQ SI, 0x30(SP) \
+    MOVQ DX, 0x38(SP) \
+    MOVQ CX, 0x40(SP) \
+    MOVQ R8, 0x48(SP) \
+    MOVQ R9, 0x50(SP) \
+    TESTB AX, AX \
+    JZ skip \
+    MOVSD X0, 0x58(SP) \
+    MOVSD X1, 0x60(SP) \
+    MOVSD X2, 0x68(SP) \
+    MOVSD X3, 0x70(SP) \
+    MOVSD X4, 0x78(SP) \
+    MOVSD X5, 0x80(SP) \
+    MOVSD X6, 0x88(SP) \
+    MOVSD X7, 0x90(SP) \
+skip: \
+    MOVQ $id, 0xA0(SP) \
+    MOVQ BX, 0xA8(SP) \
+    MOVQ R12, 0xB0(SP) \
+    MOVQ R13, 0xB8(SP) \
+    MOVQ R14, 0xC0(SP) \
+    MOVQ R15, 0xC8(SP) \
+    LEAQ ·testCallback(SB), AX \
+    MOVQ AX, 0(SP) \
+    LEAQ 0x20(SP), AX \
+    MOVQ AX, 0xD0(SP) \
+    LEAQ 0xD0(SP), AX \
+    MOVQ AX, 0x8(SP) \
+    MOVQ $8, 0x10(SP) \
+    MOVQ $0, 0x18(SP) \
+    LEAQ arg+0(FP), AX \
+    MOVQ AX, 0x20(SP) \
+    CALL cgocallback(SB) \
+    MOVQ 0x38(SP), DX \
+    MOVQ 0x98(SP), AX \
+    MOVSD 0x58(SP), X0 \
+    MOVQ 0xA8(SP), BX \
+    MOVQ 0xB0(SP), R12 \
+    MOVQ 0xB8(SP), R13 \
+    MOVQ 0xC0(SP), R14 \
+    MOVQ 0xC8(SP), R15 \
+    RET
+
+CALLBACK(callback0, 0)
+CALLBACK(callback1, 1)
+CALLBACK(callback2, 2)
+CALLBACK(callback3, 3)
+CALLBACK(callback4, 4)
+CALLBACK(callback5, 5)
+
+DATA callbacks<>+0x00(SB)/8, $callback0(SB)
+DATA callbacks<>+0x08(SB)/8, $callback1(SB)
+DATA callbacks<>+0x10(SB)/8, $callback2(SB)
+DATA callbacks<>+0x18(SB)/8, $callback3(SB)
+DATA callbacks<>+0x20(SB)/8, $callback4(SB)
+DATA callbacks<>+0x28(SB)/8, $callback5(SB)
+GLOBL callbacks<>(SB),RODATA,$48
+
 // pass struct { &args, &spec } to cgocall
 TEXT ·callWrapper(SB),NOSPLIT|WRAPPER,$32
+    NO_LOCAL_POINTERS
     MOVQ DX, 24(SP)
     LEAQ argframe+0(FP), AX
     MOVQ AX, 16(SP)
@@ -138,6 +244,9 @@ xmm:
     LOADXMMREG(7, X7)
 
 prepared:
+    CALL _cgo_topofstack(SB)
+    SUBQ AX, R13
+
     // load number of vector registers
     MOVBQSX spec_rax(R12), AX
 
@@ -146,7 +255,13 @@ prepared:
 
     MOVQ R14, SP
 
-    // TODO: check R13, if it still points to the correct stack! (could happen if we have a callback into go that splits the stack)
+    MOVQ AX, BX
+
+    // readjust our arguments in case a stack split happened
+    CALL _cgo_topofstack(SB) //clobbers AX, CX
+    ADDQ AX, R13
+
+    MOVQ BX, AX
 
     // store ret
     MOVLQSX spec_ret(R12), BX

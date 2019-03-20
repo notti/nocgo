@@ -10,3 +10,11 @@ int test_call(unsigned short i1, int i2, float f1, double f2, int i3, int i4, in
 void print_value() {
 	printf("value: %d\n", value);
 }
+
+int test_cb(int (callback(int))) {
+	int res;
+	printf("in C!\n");
+	res = callback(10);
+	printf("in C again: %d\n", res);
+	return res*2;
+}

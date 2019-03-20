@@ -10,6 +10,9 @@ import (
 //go:linkname funcPC runtime.funcPC
 func funcPC(f interface{}) uintptr
 
+//go:linkname _cgo_topofstack _cgo_topofstack
+func _cgo_topofstack()
+
 //go:linkname cgocall runtime.cgocall
 func cgocall(fn, arg unsafe.Pointer) int32
 
@@ -26,6 +29,7 @@ const (
 	classInt
 	classUint
 	classFloat
+	classCallback
 )
 
 type value struct {
@@ -82,6 +86,8 @@ func stackFields(fun interface{}) (fptr unsafe.Pointer, arguments []value, ret v
 			v.c = classInt
 		case reflect.Float32, reflect.Float64:
 			v.c = classFloat
+		case reflect.Func:
+			v.c = classCallback
 		default:
 			err = fmt.Errorf("type %s of argument number %d not supported", k, i)
 			return

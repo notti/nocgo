@@ -1,6 +1,7 @@
 package nocgo
 
 import (
+	"fmt"
 	"unsafe"
 )
 
@@ -17,16 +18,17 @@ import (
 type argtype uint16
 
 const (
-	type64     argtype = 0 // movq              64 bit
-	typeS32    argtype = 1 // movlqsx    signed 32 bit
-	typeU32    argtype = 2 // movlqzx  unsigned 32 bit
-	typeS16    argtype = 3 // movwqsx    signed 16 bit
-	typeU16    argtype = 4 // movwqzx  unsigned 16 bit
-	typeS8     argtype = 5 // movbqsx    signed 8  bit
-	typeU8     argtype = 6 // movbqzx  unsigned 8  bit
-	typeDouble argtype = 7 // movsd             64 bit
-	typeFloat  argtype = 8 // movss             32 bit
-	typeUnused argtype = 0xFFFF
+	type64       argtype = 0 // movq              64 bit
+	typeS32      argtype = 1 // movlqsx    signed 32 bit
+	typeU32      argtype = 2 // movlqzx  unsigned 32 bit
+	typeS16      argtype = 3 // movwqsx    signed 16 bit
+	typeU16      argtype = 4 // movwqzx  unsigned 16 bit
+	typeS8       argtype = 5 // movbqsx    signed 8  bit
+	typeU8       argtype = 6 // movbqzx  unsigned 8  bit
+	typeDouble   argtype = 7 // movsd             64 bit
+	typeFloat    argtype = 8 // movss             32 bit
+	typeCallback argtype = 9
+	typeUnused   argtype = 0xFFFF
 )
 
 type argument struct {
@@ -49,6 +51,26 @@ type spec struct {
 
 func callWrapper()
 
+type callbackArgs struct {
+	bp      uintptr
+	intargs [6]uintptr
+	xmmargs [8]uintptr
+	ax      uintptr
+	which   uintptr
+}
+
+func testCallback(args *callbackArgs) {
+	/*
+		TODO:
+		-find spec
+		-build frame
+		-call function
+		-set return value
+	*/
+	fmt.Printf("got: %#v\n", args)
+	args.ax = args.intargs[0] * 2
+}
+
 // makeSpec builds a call specification for the given arguments
 func makeSpec(fn uintptr, fun interface{}) error {
 	fptr, arguments, ret, err := stackFields(fun)
@@ -63,11 +85,12 @@ func makeSpec(fn uintptr, fun interface{}) error {
 
 	intreg := 0
 	xmmreg := 0
+	cbnum := 0
 
 	for _, arg := range arguments {
 		var t argtype
 		switch arg.c {
-		case classInt, classUint:
+		case classInt, classUint, classCallback:
 			switch {
 			case arg.size == 8:
 				t = type64
@@ -89,6 +112,11 @@ func makeSpec(fn uintptr, fun interface{}) error {
 				} else {
 					t = typeU8
 				}
+			}
+			if arg.c == classCallback {
+				t = typeCallback
+				arg.offset = cbnum
+				cbnum++
 			}
 			if intreg < 6 {
 				spec.intargs[intreg] = argument{uint16(arg.offset), t}
@@ -125,6 +153,8 @@ func makeSpec(fn uintptr, fun interface{}) error {
 			}
 		}
 	}
+
+	// check cbnum!
 
 	spec.rax = uint8(xmmreg)
 	for i := intreg; i < 6; i++ {

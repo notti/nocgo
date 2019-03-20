@@ -10,6 +10,11 @@ import (
 	"github.com/notti/nocgo"
 )
 
+func cb(a int32) int32 {
+	fmt.Println("In go: ", a)
+	return a * 2
+}
+
 func main() {
 	fmt.Println(os.Args) // check if startup works
 
@@ -44,6 +49,8 @@ func main() {
 
 	var printCall func()
 
+	var testCB func(cb func(int32) int32) int32
+
 	var testvalue *int
 
 	if err := l.Func("test_call", &testCall); err != nil {
@@ -51,6 +58,10 @@ func main() {
 	}
 
 	if err := l.Func("print_value", &printCall); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := l.Func("test_cb", &testCB); err != nil {
 		log.Fatal(err)
 	}
 
@@ -63,4 +74,6 @@ func main() {
 	}
 	*testvalue = 100
 	printCall()
+
+	fmt.Println("back in go: ", testCB(cb))
 }
