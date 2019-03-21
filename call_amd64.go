@@ -57,17 +57,17 @@ type callbackArgs struct {
 	xmmargs [8]uintptr
 	ax      uintptr
 	which   uintptr
+	spec    *spec
 }
 
 func testCallback(args *callbackArgs) {
 	/*
 		TODO:
-		-find spec
 		-build frame
 		-call function
 		-set return value
 	*/
-	fmt.Printf("got: %#v\n", args)
+	fmt.Printf("got: %#v\n%v\n", args, args.spec)
 	args.ax = args.intargs[0] * 2
 }
 

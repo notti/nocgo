@@ -2,11 +2,13 @@
 #include "go_asm.h"
 #include "funcdata.h"
 
+// runtime has #include "go_tls.h"
+#define	get_tls(r)	MOVQ TLS, r
+#define	g(r)	0(r)(TLS*1)
+
 // runtime has #include "go_asm.h"
 // we need to fake the defines here:
-#define slice_array 0
-#define slice_len 8
-#define slice_cap 16
+#include "go_asm_amd64.h"
 
 
 #define LOADREG(off, target) \
@@ -94,11 +96,12 @@ TEXT cgocallback(SB),NOSPLIT,$0
 // 0x90: X7
 // 0x98: AX <- ret
 // 0xA0: which
-// 0xA8: BX <- safe
-// 0xB0: R12
-// 0xB8: R13
-// 0xC0: R14
-// 0xC8: R15
+// 0xA8: spec
+// 0xB0: BX <- safe
+// 0xB8: R12
+// 0xC0: R13
+// 0xC8: R14
+// 0xD0: R15
 
 // need to save BP?
 #define CALLBACK(name, id) \
@@ -121,11 +124,11 @@ TEXT name(SB),NOSPLIT,$0xD8 \
     MOVSD X7, 0x90(SP) \
 skip: \
     MOVQ $id, 0xA0(SP) \
-    MOVQ BX, 0xA8(SP) \
-    MOVQ R12, 0xB0(SP) \
-    MOVQ R13, 0xB8(SP) \
-    MOVQ R14, 0xC0(SP) \
-    MOVQ R15, 0xC8(SP) \
+    MOVQ BX, 0xB0(SP) \
+    MOVQ R12, 0xB8(SP) \
+    MOVQ R13, 0xC0(SP) \
+    MOVQ R14, 0xC8(SP) \
+    MOVQ R15, 0xD0(SP) \
     LEAQ ·testCallback(SB), AX \
     MOVQ AX, 0(SP) \
     LEAQ 0x20(SP), AX \
@@ -136,15 +139,25 @@ skip: \
     MOVQ $0, 0x18(SP) \
     LEAQ arg+0(FP), AX \
     MOVQ AX, 0x20(SP) \
+    get_tls(AX) \
+    MOVQ g(AX), AX \
+    MOVQ g_m(AX), AX \
+    MOVQ m_libcall+libcall_args(AX), AX \
+    MOVQ AX, 0xA8(SP) \
     CALL cgocallback(SB) \
+    get_tls(AX) \
+    MOVQ g(AX), AX \
+    MOVQ g_m(AX), AX \
+    MOVQ 0xA8(SP), BX \
+    MOVQ BX, m_libcall+libcall_args(AX) \ // restore libcall_args in case it got modified
     MOVQ 0x38(SP), DX \
     MOVQ 0x98(SP), AX \
     MOVSD 0x58(SP), X0 \
-    MOVQ 0xA8(SP), BX \
-    MOVQ 0xB0(SP), R12 \
-    MOVQ 0xB8(SP), R13 \
-    MOVQ 0xC0(SP), R14 \
-    MOVQ 0xC8(SP), R15 \
+    MOVQ 0xB0(SP), BX \
+    MOVQ 0xB8(SP), R12 \
+    MOVQ 0xC0(SP), R13 \
+    MOVQ 0xC8(SP), R14 \
+    MOVQ 0xD0(SP), R15 \
     RET
 
 CALLBACK(callback0, 0)
@@ -179,6 +192,12 @@ TEXT asmcall(SB),NOSPLIT,$0
     MOVQ 8(DI), R12      // spec (preserved)
     MOVQ 0(DI), R13      // base of args (preserved)
     MOVQ SP, R14         // stack for restoring later on (preserved)
+
+    // (mis)use g.m.libcall.args for storing the spec in case we need it for callbacks
+    get_tls(AX)
+    MOVQ g(AX), AX
+    MOVQ g_m(AX), AX
+    MOVQ R12, m_libcall+libcall_args(AX)
 
     ANDQ $~0x1F, SP // 32 byte alignment for cdecl (in case someone wants to pass __m256 on the stack)
     // for no __m256 16 byte would be ok
