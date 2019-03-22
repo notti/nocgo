@@ -39,6 +39,8 @@ type value struct {
 	align  int
 }
 
+const maxCB = 6
+
 // stackFields takes pointer to function variable and returns: pointer to set it, argument offsets and type, and return value and type
 // Arguments in go are according to the following (from cmd/compile/internal/gc/align.go dowidth TFUNCARGS):
 // 3 consecutive structures on the stack
@@ -64,6 +66,7 @@ func stackFields(fun interface{}) (fptr unsafe.Pointer, arguments []value, ret v
 	ret.c = classVoid
 
 	offset := 0
+	cbnum := 0
 
 	for i := 0; i < f.NumIn(); i++ {
 		a := f.In(i)
@@ -95,6 +98,15 @@ func stackFields(fun interface{}) (fptr unsafe.Pointer, arguments []value, ret v
 
 		offset = (offset + v.align - 1) &^ (v.align - 1)
 		v.offset = offset
+
+		if v.c == classCallback {
+			v.offset = cbnum
+			cbnum++
+			if cbnum == maxCB {
+				err = fmt.Errorf("only a maximum of %d callbacks supported", maxCB)
+				return
+			}
+		}
 
 		arguments = append(arguments, v)
 

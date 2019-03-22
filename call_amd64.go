@@ -85,7 +85,6 @@ func makeSpec(fn uintptr, fun interface{}) error {
 
 	intreg := 0
 	xmmreg := 0
-	cbnum := 0
 
 	for _, arg := range arguments {
 		var t argtype
@@ -115,8 +114,6 @@ func makeSpec(fn uintptr, fun interface{}) error {
 			}
 			if arg.c == classCallback {
 				t = typeCallback
-				arg.offset = cbnum
-				cbnum++
 			}
 			if intreg < 6 {
 				spec.intargs[intreg] = argument{uint16(arg.offset), t}
