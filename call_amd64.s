@@ -12,11 +12,12 @@
 
 
 #define LOADREG(off, target) \
-    MOVLQSX spec_intargs+argument__size*off(R12), AX \
+    MOVLQSX spec_frame+frame_intargs+argument__size*off(R12), AX \
     TESTQ AX, AX \
     JS xmm \
     MOVWQZX AX, R11 \
     SHRL $16, AX \
+    ROLW $8, AX \
     ADDQ R13, R11 \
     CMPB AX, $const_type64 \
     JNE 3(PC) \
@@ -48,18 +49,18 @@
     JMP 8(PC) \
     CMPB AX, $const_typeCallback \ // callback
     JNE 5(PC) \
-    SUBQ R13, R11 \
-    MOVQ $callbacks<>(SB), AX \
-    MOVQ (AX)(R11*8), target \
+    SHRQ $8, AX \
+    MOVQ $callbacks<>(SB), R11 \
+    MOVQ (R11)(AX*8), target \
     JMP 2(PC) \
     INT $3
 
 #define LOADXMMREG(off, target) \
-    MOVLQSX spec_xmmargs+argument__size*off(R12), AX \
+    MOVLQSX spec_frame+frame_xmmargs+argument__size*off(R12), AX \
     TESTQ AX, AX \
     JS prepared \
     MOVWQZX AX, R11 \
-    SHRL $16, AX \
+    SHRL $24, AX \
     ADDQ R13, R11 \
     CMPB AX, $const_typeDouble \
     JNE 3(PC) \
@@ -203,7 +204,7 @@ TEXT asmcall(SB),NOSPLIT,$0
     // for no __m256 16 byte would be ok
     // this is actually already done by cgocall - but asmcall was called from there and destroys that :(
 
-    MOVQ spec_stack+slice_len(R12), AX // length of stack registers
+    MOVQ spec_frame+frame_stack+slice_len(R12), AX // length of stack registers
     TESTQ AX, AX
     JZ reg
 
@@ -215,14 +216,14 @@ TEXT asmcall(SB),NOSPLIT,$0
     SHLQ $3, BX
     SUBQ BX, SP
 
-    MOVQ spec_stack+slice_array(R12), BX
+    MOVQ spec_frame+frame_stack+slice_array(R12), BX
 
 next:
     DECQ AX
     MOVQ (BX)(AX*argument__size), CX
     //check type and push to stack
     MOVWQZX CX, R11
-    SHRL $16, CX
+    SHRL $24, CX
     ADDQ R13, R11
 
 #define LOADSTACK(type, instr) \
@@ -270,7 +271,7 @@ prepared:
     MOVBQSX spec_rax(R12), AX
 
     // do the actuall call
-    CALL spec_fn(R12)
+    CALL spec_frame+frame_fn(R12)
 
     MOVQ R14, SP
 
@@ -283,11 +284,11 @@ prepared:
     MOVQ BX, AX
 
     // store ret
-    MOVLQSX spec_ret(R12), BX
+    MOVLQSX spec_frame+frame_ret(R12), BX
     TESTQ BX, BX
     JS DONE
     MOVWQZX BX, R11
-    SHRL $16, BX
+    SHRL $24, BX
     ADDQ R13, R11
 
     CMPB BX, $const_type64

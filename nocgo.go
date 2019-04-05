@@ -39,31 +39,24 @@ type value struct {
 	align  int
 }
 
+type function struct {
+	arguments []value
+	ret       value
+}
+
+func aligned(address, alignment int) int {
+	return (address + alignment - 1) &^ (alignment - 1)
+}
+
 const maxCB = 6
 
-// stackFields takes pointer to function variable and returns: pointer to set it, argument offsets and type, and return value and type
-// Arguments in go are according to the following (from cmd/compile/internal/gc/align.go dowidth TFUNCARGS):
-// 3 consecutive structures on the stack
-// 1. struct: receiver argument(s)
-// 2. struct (aligned to register width): parameters
-// 3. struct (aligned to register width): return values
-func stackFields(fun interface{}) (fptr unsafe.Pointer, arguments []value, ret value, err error) {
-	v := reflect.ValueOf(fun)
-	if v.Kind() != reflect.Ptr {
-		err = errors.New("provided argument must be pointer to function variable")
-		return
-	}
-	f := v.Elem().Type()
-	if f.Kind() != reflect.Func {
-		err = errors.New("provided argument must be pointer to function variable")
-		return
-	}
+func stackFields(f reflect.Type) (target function, cb []function, err error) {
 	if f.NumOut() > 1 {
 		err = errors.New("only one or no return argument allowed")
 		return
 	}
 
-	ret.c = classVoid
+	target.ret.c = classVoid
 
 	offset := 0
 	cbnum := 0
@@ -96,19 +89,27 @@ func stackFields(fun interface{}) (fptr unsafe.Pointer, arguments []value, ret v
 			return
 		}
 
-		offset = (offset + v.align - 1) &^ (v.align - 1)
+		offset = aligned(offset, v.align)
 		v.offset = offset
 
 		if v.c == classCallback {
-			v.offset = cbnum
 			cbnum++
 			if cbnum == maxCB {
 				err = fmt.Errorf("only a maximum of %d callbacks supported", maxCB)
 				return
 			}
+			var illegal []function
+			var cbfunc function
+			cbfunc, illegal, err = stackFields(a)
+			if len(illegal) != 0 {
+				err = errors.New("nested callbacks not allowed")
+				return
+			}
+
+			cb = append(cb, cbfunc)
 		}
 
-		arguments = append(arguments, v)
+		target.arguments = append(target.arguments, v)
 
 		offset += skip + v.size
 	}
@@ -117,26 +118,50 @@ func stackFields(fun interface{}) (fptr unsafe.Pointer, arguments []value, ret v
 		a := f.Out(0)
 		k := a.Kind()
 
-		ret.size = int(a.Size())
-		ret.align = int(unsafe.Sizeof(uintptr(0))) // return values are aligned by register size - let's hope this is the same as the pointer size
+		target.ret.size = int(a.Size())
+		target.ret.align = int(unsafe.Sizeof(uintptr(0))) // return values are aligned by register size - let's hope this is the same as the pointer size
 
 		switch k {
 		case reflect.Slice:
-			ret.size = int(unsafe.Sizeof(uintptr(0)))
-			ret.c = classUint
+			target.ret.size = int(unsafe.Sizeof(uintptr(0)))
+			target.ret.c = classUint
 		case reflect.Uintptr, reflect.Ptr, reflect.UnsafePointer, reflect.Uint64, reflect.Uint32, reflect.Uint16, reflect.Uint8, reflect.Bool:
-			ret.c = classUint
+			target.ret.c = classUint
 		case reflect.Int64, reflect.Int32, reflect.Int16, reflect.Int8:
-			ret.c = classInt
+			target.ret.c = classInt
 		case reflect.Float32, reflect.Float64:
-			ret.c = classFloat
+			target.ret.c = classFloat
 		default:
 			err = fmt.Errorf("type %s of return value not supported", k)
 			return
 		}
 
-		offset = (offset + ret.align - 1) &^ (ret.align - 1)
-		ret.offset = offset
+		offset = aligned(offset, target.ret.align)
+		target.ret.offset = offset
+	}
+	return
+}
+
+// analyzeFunc takes pointer to function variable and returns: pointer to set it, argument offsets and type, and return value and type
+// Arguments in go are according to the following (from cmd/compile/internal/gc/align.go dowidth TFUNCARGS):
+// 3 consecutive structures on the stack
+// 1. struct: receiver argument(s)
+// 2. struct (aligned to register width): parameters
+// 3. struct (aligned to register width): return values
+func analyzeFunc(fun interface{}) (fptr unsafe.Pointer, target function, cb []function, err error) {
+	v := reflect.ValueOf(fun)
+	if v.Kind() != reflect.Ptr {
+		err = errors.New("provided argument must be pointer to function variable")
+		return
+	}
+	f := v.Elem().Type()
+	if f.Kind() != reflect.Func {
+		err = errors.New("provided argument must be pointer to function variable")
+		return
+	}
+	target, cb, err = stackFields(f)
+	if err != nil {
+		return
 	}
 
 	fptr = unsafe.Pointer(v.Pointer())

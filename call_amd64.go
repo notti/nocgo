@@ -15,7 +15,7 @@ import (
 // according to libffi clang might require the caller to properly (sign)extend stuff in registers - so we do that
 // structs are not supported for now (neither as argument nor as return value) - but this is not hard to do
 
-type argtype uint16
+type argtype uint8
 
 const (
 	type64       argtype = 0 // movq              64 bit
@@ -28,23 +28,29 @@ const (
 	typeDouble   argtype = 7 // movsd             64 bit
 	typeFloat    argtype = 8 // movss             32 bit
 	typeCallback argtype = 9
-	typeUnused   argtype = 0xFFFF
+	typeUnused   argtype = 0xFF
 )
 
 type argument struct {
 	offset uint16
+	cb     uint8
 	t      argtype
+}
+
+type frame struct {
+	fn      uintptr // pointer to the C-function/go-function
+	stack   []argument
+	intargs [6]argument
+	xmmargs [8]argument
+	ret     argument
 }
 
 // spec a wrapper specifcation with instructions on how to place arguments into registers/stack
 type spec struct {
 	wrapper uintptr // pointer to callWrapper()
-	fn      uintptr // pointer to the C-function
-	stack   []argument
-	intargs [6]argument
-	xmmargs [8]argument
-	ret     argument
-	rax     uint8
+	frame
+	cb  []frame
+	rax uint8
 }
 
 // FIXME: we don't support stuff > 64 bit
@@ -71,22 +77,15 @@ func testCallback(args *callbackArgs) {
 	args.ax = args.intargs[0] * 2
 }
 
-// makeSpec builds a call specification for the given arguments
-func makeSpec(fn uintptr, fun interface{}) error {
-	fptr, arguments, ret, err := stackFields(fun)
-	if err != nil {
-		return err
-	}
-
-	spec := new(spec)
-	spec.wrapper = funcPC(callWrapper)
-	spec.fn = fn
-	spec.ret.t = typeUnused
+func makeFrame(f function, fn uintptr) (ret frame, rax uint8, err error) {
+	ret.fn = fn
+	ret.ret.t = typeUnused
 
 	intreg := 0
 	xmmreg := 0
+	var cb uint8
 
-	for _, arg := range arguments {
+	for _, arg := range f.arguments {
 		var t argtype
 		switch arg.c {
 		case classInt, classUint, classCallback:
@@ -116,7 +115,7 @@ func makeSpec(fn uintptr, fun interface{}) error {
 				t = typeCallback
 			}
 			if intreg < 6 {
-				spec.intargs[intreg] = argument{uint16(arg.offset), t}
+				ret.intargs[intreg] = argument{uint16(arg.offset), cb, t}
 				intreg++
 			} else {
 				switch t {
@@ -127,7 +126,10 @@ func makeSpec(fn uintptr, fun interface{}) error {
 				case typeS8:
 					t = typeU8
 				}
-				spec.stack = append(spec.stack, argument{uint16(arg.offset), t})
+				ret.stack = append(ret.stack, argument{uint16(arg.offset), cb, t})
+			}
+			if arg.c == classCallback {
+				cb++
 			}
 		case classFloat:
 			switch {
@@ -137,7 +139,7 @@ func makeSpec(fn uintptr, fun interface{}) error {
 				t = typeFloat
 			}
 			if xmmreg < 8 {
-				spec.xmmargs[xmmreg] = argument{uint16(arg.offset), t}
+				ret.xmmargs[xmmreg] = argument{uint16(arg.offset), cb, t}
 				xmmreg++
 			} else {
 				switch t {
@@ -146,26 +148,24 @@ func makeSpec(fn uintptr, fun interface{}) error {
 				case typeFloat:
 					t = typeU32
 				}
-				spec.stack = append(spec.stack, argument{uint16(arg.offset), t})
+				ret.stack = append(ret.stack, argument{uint16(arg.offset), cb, t})
 			}
 		}
 	}
 
-	// check cbnum!
-
-	spec.rax = uint8(xmmreg)
+	rax = uint8(xmmreg)
 	for i := intreg; i < 6; i++ {
-		spec.intargs[i].t = typeUnused
+		ret.intargs[i].t = typeUnused
 	}
 	for i := xmmreg; i < 8; i++ {
-		spec.xmmargs[i].t = typeUnused
+		ret.xmmargs[i].t = typeUnused
 	}
 
-	if ret.c != classVoid {
+	if f.ret.c != classVoid {
 		var t argtype
-		switch ret.c {
+		switch f.ret.c {
 		case classInt, classUint:
-			switch ret.size {
+			switch f.ret.size {
 			case 8:
 				t = type64
 			case 4:
@@ -176,18 +176,38 @@ func makeSpec(fn uintptr, fun interface{}) error {
 				t = typeU8
 			}
 		case classFloat:
-			switch ret.size {
+			switch f.ret.size {
 			case 8:
 				t = typeDouble
 			case 4:
 				t = typeFloat
 			}
 		}
-		spec.ret.t = t
-		spec.ret.offset = uint16(ret.offset)
+		ret.ret.t = t
+		ret.ret.offset = uint16(f.ret.offset)
+	}
+	return
+}
+
+// makeSpec builds a call specification for the given arguments
+func makeSpec(fn uintptr, fun interface{}) error {
+	fptr, f, cb, err := analyzeFunc(fun)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(f, cb)
+
+	spec := new(spec)
+	spec.wrapper = funcPC(callWrapper)
+	spec.frame, spec.rax, err = makeFrame(f, fn)
+	if err != nil {
+		return err
 	}
 
 	*(*unsafe.Pointer)(fptr) = unsafe.Pointer(spec)
+
+	fmt.Println(spec)
 
 	return nil
 }
