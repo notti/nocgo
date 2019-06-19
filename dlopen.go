@@ -4,49 +4,13 @@ import (
 	"errors"
 	"reflect"
 	"unsafe"
+
+	"github.com/notti/nocgo/internal/dlopen"
+	"github.com/notti/nocgo/internal/ffi"
 )
 
-func mustSpec(fn *byte, fun interface{}) {
-	err := makeSpec(uintptr(unsafe.Pointer(fn)), fun)
-	if err != nil {
-		panic(err)
-	}
-}
-
-// on 386 we need to do the dance of cgo_import_dynamic followed by two linknames,
-// definining a variable that gets the dynamic symbol, and then derefercing it.
-// Othwerwise we get an unknown relocation type error during linking
-
-//go:linkname libc_dlopen_x libc_dlopen_x
-var libc_dlopen_x byte
-var libc_dlopen = &libc_dlopen_x
-
-//go:linkname libc_dlclose_x libc_dlclose_x
-var libc_dlclose_x byte
-var libc_dlclose = &libc_dlclose_x
-
-//go:linkname libc_dlsym_x libc_dlsym_x
-var libc_dlsym_x byte
-var libc_dlsym = &libc_dlsym_x
-
-//go:linkname libc_dlerror_x libc_dlerror_x
-var libc_dlerror_x byte
-var libc_dlerror = &libc_dlerror_x
-
-var dlopen func(filename []byte, flags int32) uintptr
-var dlclose func(handle uintptr) int32
-var dlsym func(handle uintptr, symbol []byte) uintptr
-var dlerror func() uintptr
-
-func init() {
-	mustSpec(libc_dlopen, &dlopen)
-	mustSpec(libc_dlclose, &dlclose)
-	mustSpec(libc_dlsym, &dlsym)
-	mustSpec(libc_dlerror, &dlerror)
-}
-
 func getLastError() error {
-	err := dlerror()
+	err := dlopen.DLError()
 	if err == 0 {
 		return errors.New("Unknown dl error")
 	}
@@ -58,7 +22,7 @@ type Library uintptr
 
 // Open opens the given dynamic library and returns a handle for loading symbols and functions.
 func Open(library string) (Library, error) {
-	handle := dlopen(MakeCString(library), 2 /* RTLD_NOW */)
+	handle := dlopen.DLOpen(MakeCString(library), 2 /* RTLD_NOW */)
 	if handle != 0 {
 		return Library(handle), nil
 	}
@@ -67,7 +31,7 @@ func Open(library string) (Library, error) {
 
 // Close closes the library. This might also release all resources. Any Func and Value calls on the Library after this point can give unexpected results.
 func (l Library) Close() error {
-	ret := dlclose(uintptr(l))
+	ret := dlopen.DLClose(uintptr(l))
 	if ret == 0 {
 		return nil
 	}
@@ -88,11 +52,11 @@ func (l Library) Close() error {
 //
 // See package documentation for an explanation of C-types
 func (l Library) Func(name string, fun interface{}) error {
-	addr := dlsym(uintptr(l), MakeCString(name))
+	addr := dlopen.DLSym(uintptr(l), MakeCString(name))
 	if addr == 0 {
 		return getLastError()
 	}
-	return makeSpec(addr, fun)
+	return ffi.MakeSpec(addr, fun)
 }
 
 // Value sets the given value (which must be pointer to pointer to the correct type) to the global symbol given by name.
@@ -118,7 +82,7 @@ func (l Library) Value(name string, value interface{}) error {
 		return errors.New("value must be pointer to a pointer")
 	}
 
-	addr := dlsym(uintptr(l), MakeCString(name))
+	addr := dlopen.DLSym(uintptr(l), MakeCString(name))
 	if addr == 0 {
 		return getLastError()
 	}

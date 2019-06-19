@@ -1,4 +1,4 @@
-package nocgo
+package ffi
 
 import (
 	"unsafe"
@@ -49,8 +49,8 @@ type spec struct {
 
 func callWrapper()
 
-// makeSpec builds a call specification for the given arguments
-func makeSpec(fn uintptr, fun interface{}) error {
+// MakeSpec builds a call specification for the given arguments
+func MakeSpec(fn uintptr, fun interface{}) error {
 	fptr, arguments, ret, err := stackFields(fun)
 	if err != nil {
 		return err

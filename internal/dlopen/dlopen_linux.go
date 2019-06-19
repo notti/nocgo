@@ -1,4 +1,6 @@
-package nocgo
+// +build !cgo
+
+package dlopen
 
 // we have to use the 3 argument format here :( - 2 argument format is only allowed from inside cgo
 

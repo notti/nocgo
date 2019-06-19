@@ -1,4 +1,4 @@
-package nocgo
+package ffi
 
 import (
 	"errors"
